@@ -1,0 +1,368 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+ //ENUMS ā
+enum SubscriptionPlan {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum OrgStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum OrgMemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum ProjectStatus {
+  ACTIVE
+  INACTIVE
+  ON_HOLD
+  ARCHIVED
+}
+
+enum ProjectMemberRole {
+  MANAGER
+  DEVELOPER
+  VIEWER
+  QA
+  DESIGNER
+  BUSINESS_ANALYST
+}
+
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum TicketType {
+  BUG
+  STORY
+  TASK
+  EPIC
+}
+
+enum TicketStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum EntityType {
+  TICKET
+  PROJECT
+  SPRINT
+  COMMENT
+  ATTACHMENT
+}
+
+enum ActivityAction {
+  CREATED
+  UPDATED
+  DELETED
+  ASSIGNED
+  COMMENTED
+  STATUS_CHANGED
+}
+
+enum ApiKeyScope {
+  READ
+  WRITE
+  ADMIN
+}
+
+//MODELS
+
+model Org {
+  org_id            String           @id @default(uuid())
+  org_name          String
+  slug              String           @unique
+  subscription_plan SubscriptionPlan @default(FREE)
+  status            OrgStatus        @default(ACTIVE)
+
+  // Contact info
+  org_email         String?          @unique
+  phone             String?
+  website           String?
+  logo_url          String?
+  timezone          String?          @default("UTC")
+
+  // Address
+  address_line1     String?
+  address_line2     String?
+  city              String?
+  state             String?
+  country           String?
+  postal_code       String?
+
+  created_at        DateTime         @default(now())
+  updated_at        DateTime         @updatedAt
+
+  // Relations
+  owner_id          String
+  owner             User             @relation("OrgOwner", fields: [owner_id], references: [user_id])
+
+  members           Org_Members[]
+  projects          Project[]
+  api_keys          API_Key[]
+}
+
+model Org_Members {
+  org_id    String
+  user_id   String
+  role      OrgMemberRole @default(MEMBER)
+  joined_at DateTime      @default(now())
+
+  org  Org  @relation(fields: [org_id], references: [org_id])
+  user User @relation(fields: [user_id], references: [user_id])
+
+  @@id([org_id, user_id])
+}
+
+model Project {
+  project_id  String        @id @default(uuid())
+  project_key String       
+  project_name String
+  description String?
+  status      ProjectStatus @default(ACTIVE)
+  start_date  DateTime?
+  end_date    DateTime?
+  created_at  DateTime      @default(now())
+  updated_at  DateTime      @updatedAt
+
+  // Relations
+  org_id        String
+  org           Org    @relation(fields: [org_id], references: [org_id])
+  created_by_id String
+  created_by    User   @relation("ProjectCreatedBy", fields: [created_by_id], references: [user_id])
+  updated_by_id String?
+  updated_by    User?  @relation("ProjectUpdatedBy", fields: [updated_by_id], references: [user_id])
+
+  members  Project_Members[]
+  sprints  Sprint[]
+  tickets  Ticket[]
+  labels   Label[]
+  @@unique([org_id, project_key])
+}
+
+model Project_Members {
+  project_id String
+  user_id    String
+  role       ProjectMemberRole @default(VIEWER)
+  joined_at  DateTime          @default(now())
+
+  project Project @relation(fields: [project_id], references: [project_id])
+  user    User    @relation(fields: [user_id], references: [user_id])
+
+  @@id([project_id, user_id])
+}
+
+model Sprint {
+  sprint_id   String       @id @default(uuid())
+  sprint_name String
+  goal        String?
+  status      SprintStatus @default(PLANNED)
+  start_date  DateTime?
+  end_date    DateTime?
+  created_at  DateTime     @default(now())
+  updated_at  DateTime     @updatedAt
+
+  // Relations
+  project_id    String
+  project       Project @relation(fields: [project_id], references: [project_id])
+  created_by_id String
+  created_by    User    @relation("SprintCreatedBy", fields: [created_by_id], references: [user_id])
+  updated_by_id String?
+  updated_by    User?   @relation("SprintUpdatedBy", fields: [updated_by_id], references: [user_id])
+
+  tickets Ticket[]
+}
+
+model User {
+  user_id           String     @id @default(uuid())
+  email             String     @unique
+  password_hash     String
+  first_name        String
+  last_name         String
+  avatar_url        String?
+  is_verified       Boolean    @default(false)
+  email_verified_at DateTime?
+  last_login_at     DateTime?
+  status            UserStatus @default(ACTIVE)
+  created_at        DateTime   @default(now())
+  updated_at        DateTime   @updatedAt
+
+  // Back-relations
+  owned_orgs            Org[]             @relation("OrgOwner")
+  org_memberships       Org_Members[]
+  project_memberships   Project_Members[]
+  created_projects      Project[]         @relation("ProjectCreatedBy")
+  updated_projects      Project[]         @relation("ProjectUpdatedBy")
+  created_sprints       Sprint[]          @relation("SprintCreatedBy")
+  updated_sprints       Sprint[]          @relation("SprintUpdatedBy")
+  reported_tickets      Ticket[]          @relation("TicketReporter")
+  assigned_tickets      Ticket[]          @relation("TicketAssignee")
+  created_tickets       Ticket[]          @relation("TicketCreatedBy")
+  updated_tickets       Ticket[]          @relation("TicketUpdatedBy")
+  comments              Comment[]
+  uploaded_attachments  Attachment[]
+  activity_logs         Activity_Log[]
+  api_keys              API_Key[]
+}
+
+model Ticket {
+  ticket_id    String         @id @default(uuid())
+  ticket_name  String
+  description  String?
+  ticket_type  TicketType     @default(TASK)
+  status       TicketStatus   @default(TODO)
+  priority     TicketPriority @default(MEDIUM)
+  story_points Int?
+  due_date     DateTime?
+  created_at   DateTime       @default(now())
+  updated_at   DateTime       @updatedAt
+
+  // Relations
+  project_id       String
+  project          Project  @relation(fields: [project_id], references: [project_id])
+  sprint_id        String?
+  sprint           Sprint?  @relation(fields: [sprint_id], references: [sprint_id])
+  parent_ticket_id String?
+  parent_ticket    Ticket?  @relation("SubTickets", fields: [parent_ticket_id], references: [ticket_id])
+  sub_tickets      Ticket[] @relation("SubTickets")
+  reporter_id      String
+  reporter         User     @relation("TicketReporter", fields: [reporter_id], references: [user_id])
+  assignee_id      String?
+  assignee         User?    @relation("TicketAssignee", fields: [assignee_id], references: [user_id])
+  created_by_id    String
+  created_by       User     @relation("TicketCreatedBy", fields: [created_by_id], references: [user_id])
+  updated_by_id    String?
+  updated_by       User?    @relation("TicketUpdatedBy", fields: [updated_by_id], references: [user_id])
+
+  comments    Comment[]
+  attachments Attachment[]
+  labels      Ticket_Label[]
+}
+
+model Comment {
+  comment_id   String   @id @default(uuid())
+  comment_text String
+  is_edited    Boolean  @default(false)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  ticket_id String
+  ticket    Ticket @relation(fields: [ticket_id], references: [ticket_id])
+  author_id String
+  author    User   @relation(fields: [author_id], references: [user_id])
+
+  attachments Attachment[]
+}
+
+model Attachment {
+  attachment_id String   @id @default(uuid())
+  file_name     String
+  file_type     String
+  file_size     Int
+  file_url      String
+  created_at    DateTime @default(now())
+
+  ticket_id    String?
+  ticket       Ticket?  @relation(fields: [ticket_id], references: [ticket_id])
+  comment_id   String?
+  comment      Comment? @relation(fields: [comment_id], references: [comment_id])
+  uploaded_by  String
+  uploader     User     @relation(fields: [uploaded_by], references: [user_id])
+}
+
+model Label {
+  label_id   String @id @default(uuid())
+  label_name String
+  color      String
+
+  project_id String
+  project    Project @relation(fields: [project_id], references: [project_id])
+
+  tickets Ticket_Label[]
+}
+
+model Ticket_Label {
+  ticket_id String
+  label_id  String
+
+  ticket Ticket @relation(fields: [ticket_id], references: [ticket_id])
+  label  Label  @relation(fields: [label_id], references: [label_id])
+
+  @@id([ticket_id, label_id])
+}
+
+model Activity_Log {
+  log_id               String         @id @default(uuid())
+  entity_type          EntityType
+  entity_id            String
+  action               ActivityAction
+  old_value            Json?
+  new_value            Json?
+  activity_description String?
+  created_at           DateTime       @default(now())
+
+  performed_by_id String
+  performed_by    User   @relation(fields: [performed_by_id], references: [user_id])
+}
+
+model API_Key {
+  key_id       String      @id @default(uuid())
+  key_hash     String      @unique
+  name         String
+  scope        ApiKeyScope @default(READ)
+  is_active    Boolean     @default(true)
+  last_used_at DateTime?
+  expires_at   DateTime?
+  created_at   DateTime    @default(now())
+
+  user_id String
+  user    User   @relation(fields: [user_id], references: [user_id])
+  org_id  String
+  org     Org    @relation(fields: [org_id], references: [org_id])
+}
+
+model OTP {
+  id         String   @id @default(uuid())
+  email      String
+  otp_code   String
+  expires_at DateTime
+  created_at DateTime @default(now())
+
+  @@index([email])
+}

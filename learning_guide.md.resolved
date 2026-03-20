@@ -1,0 +1,94 @@
+# 🧠 JIRA Clone Backend - Architecture & Learning Guide
+
+Welcome to the backend architecture guide! This document explains how the code is organized, what each layer does, and how a generic API request flows through the entire system.
+
+---
+
+## 🌊 The Request Journey (How Everything Connects)
+
+When a user makes an API request (like `POST /api/v1/auth/register`), it travels through several layers in a specific order:
+
+1. **[app.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/app.ts)** intercepts the request and matches it to the main router (`/api/v1`).
+2. **Routes (`routes/`):** Matches the specific endpoint (`/auth/register`) and hands it to the middleware/controllers in the route definition.
+3. **Middleware (`middleware/`):** Runs checks (e.g., "Is the user logged in?" or "Is the JSON payload valid?"). If it fails, the request is rejected immediately.
+4. **Validators (`validators/`):** Zod schemas define the required data shape and enforce strict type rules before the controller can run.
+5. **Controllers (`controllers/`):** Business logic runs. This is where we interact with the database using Prisma.
+6. **Utils (`utils/`):** Formatting the successful response via [ApiResponse](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/utils/ApiResponse.ts#1-14) or throwing errors via [ApiError](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/utils/ApiError.ts#1-24).
+
+---
+
+## 🗂️ Directory Breakdown
+
+### 1. 🛣️ Routes (`src/routes/`)
+**Purpose:** Think of routes as the "mailroom directory." They map a URL (like `GET /users/me`) to the specific Controller function that handles it.
+
+**How they are coded:**
+Instead of putting all routes in one massive file, you created separate, modular files for each domain (e.g., [auth.routes.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/routes/auth.routes.ts), [project.routes.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/routes/project.routes.ts)). 
+These are all imported into a master router inside [src/routes/index.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/routes/index.ts), which attaches them to base paths like `/auth` and `/projects`.
+
+**Example ([ticket.routes.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/routes/ticket.routes.ts)):**
+```typescript
+const router = Router();
+// 1. URL Path | 2. Auth Check | 3. Validation | 4. Controller Logic
+router.post("/", authenticate, validate(createTicketSchema), createTicket);
+```
+
+### 2. 🛡️ Middleware (`src/middleware/`)
+**Purpose:** Middlewares are the "bouncers" of your app. They intercept requests *before* they reach your Controller.
+
+- **[auth.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/middleware/auth.ts) ([authenticate](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/middleware/auth.ts#19-65)):** Checks if the request has a valid JWT token in the headers or cookies. If missing or invalid, it throws a `401 Unauthorized` error. If valid, it extracts the `user_id` and attaches it to `req.user`.
+- **[orgAccess.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/middleware/orgAccess.ts) & [projectAccess.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/middleware/projectAccess.ts):** Resolves custom roles based on the URL. If someone tries to delete a project, [projectAccess(["MANAGER"])](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/middleware/projectAccess.ts#7-84) jumps in, checks the database, and blocks them if they are only a `VIEWER` or `DEVELOPER` role.
+- **[validate.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/middleware/validate.ts):** Takes a strict Zod schema, checks it against the `req.body` or `req.params`. If the user sent bad data (like missing an `email` field), this middleware instantly rejects it without even bothering the Controller.
+- **[errorHandler.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/middleware/errorHandler.ts):** A global safety net. If a Controller throws an [ApiError](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/utils/ApiError.ts#1-24) anywhere, this middleware catches it at the very bottom of the Express pipeline and formats it nicely into a JSON response.
+
+### 3. 🚦 Validators (`src/validators/`)
+**Purpose:** Defines the strict shape of incoming data. Rather than writing dozens of `if (!req.body.email) return error` lines in your controllers, you offload this onto **Zod**.
+
+**How they work:**
+You define a schema:
+```typescript
+export const loginSchema = {
+    body: z.object({
+        email: z.string().email("Invalid email format"),
+        password: z.string().min(6)
+    })
+};
+```
+The [validate](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/middleware/validate.ts#5-39) middleware checks incoming requests against this schema. Since they are verified beforehand, your controllers can blindly trust that `req.body.email` exists and is formatted correctly.
+
+### 4. 🧠 Controllers (`src/controllers/`)
+**Purpose:** The brain of the operation. By the time a request gets here, it is authenticated, authorized, and validated. The controller focuses purely on business logic.
+
+**Roles of a Controller:**
+- Read the incoming data off `req.body`, `req.params`, or `req.user`.
+- Perform database operations (Create, Read, Update, Delete) using [prisma](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/prisma/schema.prisma).
+- Wrap successful operations in your custom [ApiResponse](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/utils/ApiResponse.ts#1-14) wrapper.
+- Throw custom [ApiError(code, message)](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/utils/ApiError.ts#1-24) instances if something logically fails (like "Password incorrect" or "Ticket not found").
+
+### 5. 🛠️ Utils (`src/utils/`)
+**Purpose:** Helper functions that abstract away repetitive boilerplate code.
+
+- **[asyncHandler.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/utils/asyncHandler.ts):** Normally, every async Express route needs a `try { ... } catch (err) { next(err) }` block so that crashes don't stall the server. [asyncHandler](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/utils/asyncHandler.ts#5-10) is a wrapper function that automatically wraps your controllers in a try-catch for you.
+- **[ApiError.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/utils/ApiError.ts):** A standard way of throwing errors. `throw new ApiError(404, "User not found")`.
+- **[ApiResponse.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/utils/ApiResponse.ts):** Standardizes the shape of successful responses so the frontend always expects `{ success: true, statusCode: 200, data: {...}, message: "..." }`.
+
+### 6. 🔌 The Main Files ([src/app.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/app.ts) & [src/index.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/index.ts))
+**Purpose:** Bootstrapping the application.
+
+- **[app.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/app.ts):** Instantiates Express. This is where global logic like CORS protection, JSON body parsers, cookie parsers, and the master router ([routes/index.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/routes/index.ts)) are plugged in.
+- **[index.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/index.ts):** The actual execution script. It imports the fully prepared `app` from [app.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/app.ts), tests the database connection with Prisma, and runs `app.listen(port)` to open the HTTP server on Port 5000.
+
+---
+
+## 🔍 Looking at a Full Example Flow: Deleting a Ticket
+
+1. **Client** sends `DELETE /api/v1/orgs/apple/projects/IOS/tickets/abc-123` with a Bearer Token.
+2. Request hits Express ([app.ts](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/app.ts)), routes to `/api/v1` (`index.routes.ts`), cascades down to the org router, into the project router, and finally the ticket router.
+3. The Ticket Route definition runs: 
+   `router.delete("/:ticketId", authenticate, orgAccess(), projectAccess(["MANAGER"]), deleteTicket)`
+4. **[authenticate](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/middleware/auth.ts#19-65) middleware** verifies the JWT. (Attaches `req.user`).
+5. **[orgAccess()](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/middleware/orgAccess.ts#7-69) middleware** looks up the `apple` slug in the DB, verifies the user is a member of the org.
+6. **[projectAccess(["MANAGER"])](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/middleware/projectAccess.ts#7-84) middleware** verifies the user has the "MANAGER" role in the "IOS" project setup. (If they are a DEVELOPER, this throws a `403 Forbidden` right here).
+7. Finally, the **`deleteTicket` controller** executes! It accesses Prisma, runs `prisma.ticket.delete(...)`, and responds with [ApiResponse(200)](file:///c:/Users/HP/Desktop/JIRA%20Project/backend/src/utils/ApiResponse.ts#1-14).
+
+This modular approach ensures security is handled predictably everywhere, business logic stays clean, and bugs are easy to trace.
