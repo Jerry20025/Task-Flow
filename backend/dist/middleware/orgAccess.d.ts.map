@@ -1,0 +1,1 @@
+{"version":3,"file":"orgAccess.d.ts","sourceRoot":"","sources":["../../src/middleware/orgAccess.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,QAAQ,EAAE,YAAY,EAAE,MAAM,SAAS,CAAC;AACjD,OAAO,EAAE,WAAW,EAAE,MAAM,QAAQ,CAAC;AAGrC,OAAO,EAAE,aAAa,EAAE,MAAM,wBAAwB,CAAC;AAEvD;;;;GAIG;AACH,eAAO,MAAM,SAAS,GAAI,gBAAgB,aAAa,EAAE,MACvC,KAAK,WAAW,EAAE,MAAM,QAAQ,EAAE,MAAM,YAAY,kBAuDrE,CAAC"}

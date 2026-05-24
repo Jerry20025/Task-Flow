@@ -5,7 +5,6 @@ import useSWR from 'swr';
 import {
   Building2,
   FolderKanban,
-  Users,
   AlertCircle,
   CheckCircle2,
   Clock,
@@ -16,19 +15,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
-import type { Ticket, Organization, OrgRole } from '@/lib/types';
+import type { Ticket, Organization } from '@/lib/types';
 
-const priorityColors = {
+const priorityColors: Record<string, string> = {
   LOW: 'bg-muted text-muted-foreground',
   MEDIUM: 'bg-primary/20 text-primary',
   HIGH: 'bg-orange-500/20 text-orange-500',
   URGENT: 'bg-destructive/20 text-destructive',
 };
 
-const statusIcons = {
+const statusIcons: Record<string, React.ElementType> = {
   TODO: Clock,
   IN_PROGRESS: AlertCircle,
   IN_REVIEW: AlertCircle,
@@ -39,18 +37,24 @@ const statusIcons = {
 export default function DashboardPage() {
   const { user } = useAuth();
 
-  const { data: orgsData, isLoading: orgsLoading } = useSWR('dashboard-orgs', async () => {
-    const response = await api.getMyOrgs();
-    return response.data;
-  });
+  const { data: orgsData, isLoading: orgsLoading } = useSWR(
+    'dashboard-orgs',
+    async () => {
+      const response = await api.getMyOrgs();
+      return response.data ?? [];
+    }
+  );
 
-  const { data: ticketsData, isLoading: ticketsLoading } = useSWR('dashboard-tickets', async () => {
-    const response = await api.getMyTickets({ limit: 10 });
-    return response.data;
-  });
+  const { data: ticketsData, isLoading: ticketsLoading } = useSWR(
+    'dashboard-tickets',
+    async () => {
+      const response = await api.getMyTickets({ limit: 10 });
+      return response.data;
+    }
+  );
 
-  const orgs = orgsData || [];
-  const tickets = ticketsData?.tickets || [];
+  const orgs: Organization[] = orgsData ?? [];
+  const tickets: Ticket[] = ticketsData?.tickets ?? [];
 
   const stats = [
     {
@@ -61,19 +65,21 @@ export default function DashboardPage() {
     },
     {
       name: 'My Tickets',
-      value: ticketsData?.pagination?.total || 0,
+      value: ticketsData?.pagination?.total ?? 0,
       icon: FolderKanban,
       href: '/app/my-tickets',
     },
     {
       name: 'In Progress',
-      value: tickets.filter((t: Ticket) => t.status === 'IN_PROGRESS').length,
+      value: tickets.filter((t) => t.status === 'IN_PROGRESS').length,
       icon: AlertCircle,
       color: 'text-primary',
     },
     {
       name: 'Completed',
-      value: tickets.filter((t: Ticket) => t.status === 'RESOLVED' || t.status === 'CLOSED').length,
+      value: tickets.filter(
+        (t) => t.status === 'RESOLVED' || t.status === 'CLOSED'
+      ).length,
       icon: CheckCircle2,
       color: 'text-green-500',
     },
@@ -103,7 +109,7 @@ export default function DashboardPage() {
                     {orgsLoading || ticketsLoading ? '-' : stat.value}
                   </p>
                 </div>
-                <div className={`p-3 rounded-lg bg-muted ${stat.color || ''}`}>
+                <div className={`p-3 rounded-lg bg-muted ${stat.color ?? ''}`}>
                   <stat.icon className="h-6 w-6" />
                 </div>
               </div>
@@ -152,9 +158,9 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {orgs.slice(0, 5).map((org: Organization & { my_role: OrgRole }) => (
+                {orgs.slice(0, 5).map((org) => (
                   <Link
-                    key={org.id}
+                    key={org.org_id}   // ✅ org_id not id
                     href={`/app/orgs/${org.slug}`}
                     className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors"
                   >
@@ -165,13 +171,16 @@ export default function DashboardPage() {
                       <div>
                         <p className="font-medium text-foreground">{org.org_name}</p>
                         <p className="text-sm text-muted-foreground">
-                          {org._count?.projects || 0} projects · {org._count?.members || 0} members
+                          {org._count?.projects ?? 0} projects ·{' '}
+                          {org._count?.members ?? 0} members
                         </p>
                       </div>
                     </div>
-                    <Badge variant="outline" className="capitalize">
-                      {org.my_role?.toLowerCase()}
-                    </Badge>
+                    {org.my_role && (
+                      <Badge variant="outline" className="capitalize">
+                        {org.my_role.toLowerCase()}
+                      </Badge>
+                    )}
                   </Link>
                 ))}
               </div>
@@ -181,11 +190,9 @@ export default function DashboardPage() {
 
         {/* Recent Tickets */}
         <Card className="bg-card border-border">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-card-foreground">My Tickets</CardTitle>
-              <CardDescription>Tasks assigned to you</CardDescription>
-            </div>
+          <CardHeader>
+            <CardTitle className="text-card-foreground">My Tickets</CardTitle>
+            <CardDescription>Tasks assigned to you</CardDescription>
           </CardHeader>
           <CardContent>
             {ticketsLoading ? (
@@ -199,11 +206,11 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {tickets.slice(0, 5).map((ticket: Ticket) => {
-                  const StatusIcon = statusIcons[ticket.status] || Clock;
+                {tickets.slice(0, 5).map((ticket) => {
+                  const StatusIcon = statusIcons[ticket.status] ?? Clock;
                   return (
                     <div
-                      key={ticket.id}
+                      key={ticket.ticket_id}   // ✅ ticket_id not id
                       className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0">
@@ -212,7 +219,10 @@ export default function DashboardPage() {
                           <p className="font-medium text-foreground truncate">
                             {ticket.ticket_name}
                           </p>
-                          <p className="text-sm text-muted-foreground">{ticket.ticket_key}</p>
+                          {/* ticket_key doesn't exist — show ticket_id shortened */}
+                          <p className="text-sm text-muted-foreground font-mono">
+                            #{ticket.ticket_id.slice(0, 8)}
+                          </p>
                         </div>
                       </div>
                       <Badge className={priorityColors[ticket.priority]}>

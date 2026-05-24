@@ -3,9 +3,9 @@ import { z } from "zod";
 export const createOrgSchema = {
     body: z.object({
         org_name: z.string().min(2, "Org name must be at least 2 characters").max(100),
-        org_email: z.string().email().optional(),
+        org_email: z.string().email("Invalid org email").optional(),
         phone: z.string().optional(),
-        website: z.string().url().optional(),
+        website: z.string().url("Invalid website URL").optional(),
         timezone: z.string().optional(),
         address_line1: z.string().optional(),
         address_line2: z.string().optional(),
@@ -33,15 +33,16 @@ export const updateOrgSchema = {
     }),
 };
 
+// Uses email — never user_id (managers know emails, not internal UUIDs)
 export const addOrgMemberSchema = {
     body: z.object({
-        user_id: z.string().uuid("Invalid user ID"),
+        email: z.string().email("Invalid email address"),
         role: z.enum(["ADMIN", "MEMBER"]).default("MEMBER"),
     }),
 };
 
 export const updateOrgMemberSchema = {
     body: z.object({
-        role: z.enum(["ADMIN", "MEMBER"]),
+        role: z.enum(["OWNER", "ADMIN", "MEMBER"]),
     }),
 };

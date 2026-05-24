@@ -5,13 +5,14 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Loader2, User, Lock, Trash2 } from 'lucide-react';
+import useSWR from 'swr';
+import { Loader2, User, Lock, Trash2, Mail, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field, FieldGroup, FieldLabel, FieldMessage } from '@/components/ui/field';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,6 +27,8 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import type { Organization } from '@/lib/types';
 
 const profileSchema = z.object({
   first_name: z.string().min(1, 'First name is required').max(50),
@@ -62,6 +65,15 @@ export default function ProfilePage() {
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Fetch user orgs to detect ownership before allowing account deletion
+  const { data: myOrgs } = useSWR('my-orgs', async () => {
+    const res = await api.getMyOrgs();
+    return res.data;
+  });
+  const ownedOrgs: Organization[] = (myOrgs || []).filter(
+    (o: Organization & { my_role?: string }) => o.my_role === 'OWNER'
+  );
 
   const profileForm = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
@@ -101,7 +113,7 @@ export default function ProfilePage() {
   const onUpdatePassword = async (data: PasswordFormData) => {
     setIsUpdatingPassword(true);
     try {
-      await api.updatePassword({
+      await api.changePassword({
         current_password: data.current_password,
         new_password: data.new_password,
       });
@@ -129,7 +141,7 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-3xl mx-auto space-y-8">
+    <div className="p-6 lg:p-8 space-y-8">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">Profile Settings</h1>
@@ -138,17 +150,39 @@ export default function ProfilePage() {
         </p>
       </div>
 
-      {/* Profile Info */}
-      <Card className="bg-card border-border">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <User className="h-5 w-5 text-muted-foreground" />
-            <CardTitle>Profile Information</CardTitle>
+      {/* Email Verification Status */}
+      {!user?.is_verified && (
+        <div className="flex items-center gap-3 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-700 dark:text-yellow-400">
+          <Mail className="h-5 w-5 shrink-0" />
+          <div>
+            <p className="font-medium">Email not verified</p>
+            <p className="text-sm opacity-80">
+              Check your inbox for the verification link we sent when you registered.
+            </p>
           </div>
-          <CardDescription>Update your personal details</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={profileForm.handleSubmit(onUpdateProfile)} className="space-y-6">
+        </div>
+      )}
+
+      {user?.is_verified && (
+        <div className="flex items-center gap-3 p-4 rounded-lg bg-green-500/10 border border-green-500/30 text-green-700 dark:text-green-400">
+          <CheckCircle2 className="h-5 w-5 shrink-0" />
+          <p className="text-sm font-medium">Email verified</p>
+        </div>
+      )}
+
+      {/* Profile Info */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="md:col-span-1 space-y-2">
+          <div className="flex items-center gap-2 text-foreground font-semibold text-lg">
+            <User className="h-5 w-5 text-muted-foreground" />
+            <h2>Profile Information</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">Update your personal details.</p>
+        </div>
+        <div className="md:col-span-2">
+          <Card className="bg-card border-border">
+            <CardContent className="p-6">
+              <form onSubmit={profileForm.handleSubmit(onUpdateProfile)} className="space-y-6">
             <div className="flex items-center gap-4 mb-6">
               <Avatar className="h-20 w-20">
                 <AvatarImage src={user?.avatar_url} />
@@ -157,9 +191,14 @@ export default function ProfilePage() {
                 </AvatarFallback>
               </Avatar>
               <div>
-                <p className="font-medium text-foreground">
-                  {user?.first_name} {user?.last_name}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="font-medium text-foreground">
+                    {user?.first_name} {user?.last_name}
+                  </p>
+                  <Badge variant={user?.is_verified ? 'outline' : 'secondary'} className="text-xs">
+                    {user?.is_verified ? '✓ Verified' : 'Unverified'}
+                  </Badge>
+                </div>
                 <p className="text-sm text-muted-foreground">{user?.email}</p>
               </div>
             </div>
@@ -214,27 +253,31 @@ export default function ProfilePage() {
               </Field>
             </FieldGroup>
 
-            <div className="flex justify-end">
+            <div className="flex justify-end pt-4">
               <Button type="submit" disabled={isUpdatingProfile}>
                 {isUpdatingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Save Changes
               </Button>
             </div>
           </form>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       {/* Change Password */}
-      <Card className="bg-card border-border">
-        <CardHeader>
-          <div className="flex items-center gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-8 border-t border-border">
+        <div className="md:col-span-1 space-y-2">
+          <div className="flex items-center gap-2 text-foreground font-semibold text-lg">
             <Lock className="h-5 w-5 text-muted-foreground" />
-            <CardTitle>Change Password</CardTitle>
+            <h2>Change Password</h2>
           </div>
-          <CardDescription>Update your password to keep your account secure</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={passwordForm.handleSubmit(onUpdatePassword)} className="space-y-6">
+          <p className="text-sm text-muted-foreground">Update your password to keep your account secure.</p>
+        </div>
+        <div className="md:col-span-2">
+          <Card className="bg-card border-border">
+            <CardContent className="p-6">
+              <form onSubmit={passwordForm.handleSubmit(onUpdatePassword)} className="space-y-6">
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="current_password">Current password</FieldLabel>
@@ -285,36 +328,73 @@ export default function ProfilePage() {
               </Field>
             </FieldGroup>
 
-            <div className="flex justify-end">
+            <div className="flex justify-end pt-4">
               <Button type="submit" disabled={isUpdatingPassword}>
                 {isUpdatingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Update Password
               </Button>
             </div>
           </form>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       {/* Danger Zone */}
-      <Card className="bg-card border-destructive/50">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Trash2 className="h-5 w-5 text-destructive" />
-            <CardTitle className="text-destructive">Danger Zone</CardTitle>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-8 border-t border-border">
+        <div className="md:col-span-1 space-y-2">
+          <div className="flex items-center gap-2 text-destructive font-semibold text-lg">
+            <Trash2 className="h-5 w-5" />
+            <h2>Danger Zone</h2>
           </div>
-          <CardDescription>Irreversible and destructive actions</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
+          <p className="text-sm text-muted-foreground">Irreversible and destructive actions.</p>
+        </div>
+        <div className="md:col-span-2">
+          <Card className="bg-card border-destructive/50">
+            <CardContent className="p-6">
+              <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
               <p className="font-medium text-foreground">Delete account</p>
               <p className="text-sm text-muted-foreground">
                 Permanently delete your account and all associated data
               </p>
+
+              {/* Owned orgs warning */}
+              {ownedOrgs.length > 0 && (
+                <div className="mt-3 flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium">Transfer ownership first</p>
+                    <p className="mt-0.5 opacity-80">
+                      You own the following organizations. Transfer ownership before deleting your account:
+                    </p>
+                    <ul className="mt-1 space-y-0.5">
+                      {ownedOrgs.map((org) => (
+                        <li key={org.org_id}>
+                          <Link
+                            href={`/app/orgs/${org.slug}/settings`}
+                            className="underline font-medium hover:opacity-80"
+                          >
+                            {org.org_name}
+                          </Link>
+                          {' '}→ Settings → Transfer Ownership
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
             </div>
+
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive">Delete Account</Button>
+                <Button
+                  variant="destructive"
+                  disabled={ownedOrgs.length > 0}
+                  title={ownedOrgs.length > 0 ? 'Transfer org ownership first' : undefined}
+                >
+                  Delete Account
+                </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
@@ -336,9 +416,11 @@ export default function ProfilePage() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-          </div>
-        </CardContent>
-      </Card>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

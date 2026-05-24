@@ -1,0 +1,20 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const sprint_controller_1 = require("../controllers/sprint.controller");
+const auth_1 = require("../middleware/auth");
+const orgAccess_1 = require("../middleware/orgAccess");
+const projectAccess_1 = require("../middleware/projectAccess");
+const validate_1 = require("../middleware/validate");
+const sprint_validator_1 = require("../validators/sprint.validator");
+const router = (0, express_1.Router)({ mergeParams: true });
+router.use(auth_1.authenticate);
+router.post("/", (0, orgAccess_1.orgAccess)(), (0, projectAccess_1.projectAccess)(["MANAGER"]), (0, validate_1.validate)(sprint_validator_1.createSprintSchema), sprint_controller_1.createSprint);
+router.get("/", (0, orgAccess_1.orgAccess)(), (0, projectAccess_1.projectAccess)(), sprint_controller_1.listSprints);
+router.get("/:sprintId", (0, orgAccess_1.orgAccess)(), (0, projectAccess_1.projectAccess)(), sprint_controller_1.getSprint);
+router.patch("/:sprintId", (0, orgAccess_1.orgAccess)(), (0, projectAccess_1.projectAccess)(["MANAGER"]), (0, validate_1.validate)(sprint_validator_1.updateSprintSchema), sprint_controller_1.updateSprint);
+router.delete("/:sprintId", (0, orgAccess_1.orgAccess)(), (0, projectAccess_1.projectAccess)(["MANAGER"]), sprint_controller_1.deleteSprint);
+router.patch("/:sprintId/activate", (0, orgAccess_1.orgAccess)(), (0, projectAccess_1.projectAccess)(["MANAGER"]), sprint_controller_1.activateSprint);
+router.patch("/:sprintId/complete", (0, orgAccess_1.orgAccess)(), (0, projectAccess_1.projectAccess)(["MANAGER"]), sprint_controller_1.completeSprint);
+exports.default = router;
+//# sourceMappingURL=sprint.routes.js.map

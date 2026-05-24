@@ -1,14 +1,17 @@
 generator client {
-  provider = "prisma-client-js"
-  output   = "../generated/prisma"
+  provider        = "prisma-client-js"
+  output          = "../generated/prisma"
+  // previewFeatures = ["driverAdapters"]
 }
 
+// Prisma 7: connection URL lives in ../prisma.config.ts (datasource.url).
+// Do not add `url` here — the CLI and PrismaClient use prisma.config + adapter (src/lib/prisma.ts).
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
 }
- //ENUMS ā
+
+// ─── ENUMS ────────────────────────────────────────────────────
+
 enum SubscriptionPlan {
   FREE
   STARTER
@@ -102,7 +105,7 @@ enum ApiKeyScope {
   ADMIN
 }
 
-//MODELS
+// ─── MODELS ───────────────────────────────────────────────────
 
 model Org {
   org_id            String           @id @default(uuid())
@@ -111,31 +114,27 @@ model Org {
   subscription_plan SubscriptionPlan @default(FREE)
   status            OrgStatus        @default(ACTIVE)
 
-  // Contact info
-  org_email         String?          @unique
-  phone             String?
-  website           String?
-  logo_url          String?
-  timezone          String?          @default("UTC")
+  org_email     String?  @unique
+  phone         String?
+  website       String?
+  logo_url      String?
+  timezone      String?  @default("UTC")
+  address_line1 String?
+  address_line2 String?
+  city          String?
+  state         String?
+  country       String?
+  postal_code   String?
 
-  // Address
-  address_line1     String?
-  address_line2     String?
-  city              String?
-  state             String?
-  country           String?
-  postal_code       String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
-  created_at        DateTime         @default(now())
-  updated_at        DateTime         @updatedAt
+  owner_id String
+  owner    User   @relation("OrgOwner", fields: [owner_id], references: [user_id])
 
-  // Relations
-  owner_id          String
-  owner             User             @relation("OrgOwner", fields: [owner_id], references: [user_id])
-
-  members           Org_Members[]
-  projects          Project[]
-  api_keys          API_Key[]
+  members  Org_Members[]
+  projects Project[]
+  api_keys API_Key[]
 }
 
 model Org_Members {
@@ -151,17 +150,16 @@ model Org_Members {
 }
 
 model Project {
-  project_id  String        @id @default(uuid())
-  project_key String       
+  project_id   String        @id @default(uuid())
+  project_key  String
   project_name String
-  description String?
-  status      ProjectStatus @default(ACTIVE)
-  start_date  DateTime?
-  end_date    DateTime?
-  created_at  DateTime      @default(now())
-  updated_at  DateTime      @updatedAt
+  description  String?
+  status       ProjectStatus @default(ACTIVE)
+  start_date   DateTime?
+  end_date     DateTime?
+  created_at   DateTime      @default(now())
+  updated_at   DateTime      @updatedAt
 
-  // Relations
   org_id        String
   org           Org    @relation(fields: [org_id], references: [org_id])
   created_by_id String
@@ -169,10 +167,11 @@ model Project {
   updated_by_id String?
   updated_by    User?  @relation("ProjectUpdatedBy", fields: [updated_by_id], references: [user_id])
 
-  members  Project_Members[]
-  sprints  Sprint[]
-  tickets  Ticket[]
-  labels   Label[]
+  members Project_Members[]
+  sprints Sprint[]
+  tickets Ticket[]
+  labels  Label[]
+
   @@unique([org_id, project_key])
 }
 
@@ -198,7 +197,6 @@ model Sprint {
   created_at  DateTime     @default(now())
   updated_at  DateTime     @updatedAt
 
-  // Relations
   project_id    String
   project       Project @relation(fields: [project_id], references: [project_id])
   created_by_id String
@@ -223,22 +221,21 @@ model User {
   created_at        DateTime   @default(now())
   updated_at        DateTime   @updatedAt
 
-  // Back-relations
-  owned_orgs            Org[]             @relation("OrgOwner")
-  org_memberships       Org_Members[]
-  project_memberships   Project_Members[]
-  created_projects      Project[]         @relation("ProjectCreatedBy")
-  updated_projects      Project[]         @relation("ProjectUpdatedBy")
-  created_sprints       Sprint[]          @relation("SprintCreatedBy")
-  updated_sprints       Sprint[]          @relation("SprintUpdatedBy")
-  reported_tickets      Ticket[]          @relation("TicketReporter")
-  assigned_tickets      Ticket[]          @relation("TicketAssignee")
-  created_tickets       Ticket[]          @relation("TicketCreatedBy")
-  updated_tickets       Ticket[]          @relation("TicketUpdatedBy")
-  comments              Comment[]
-  uploaded_attachments  Attachment[]
-  activity_logs         Activity_Log[]
-  api_keys              API_Key[]
+  owned_orgs           Org[]             @relation("OrgOwner")
+  org_memberships      Org_Members[]
+  project_memberships  Project_Members[]
+  created_projects     Project[]         @relation("ProjectCreatedBy")
+  updated_projects     Project[]         @relation("ProjectUpdatedBy")
+  created_sprints      Sprint[]          @relation("SprintCreatedBy")
+  updated_sprints      Sprint[]          @relation("SprintUpdatedBy")
+  reported_tickets     Ticket[]          @relation("TicketReporter")
+  assigned_tickets     Ticket[]          @relation("TicketAssignee")
+  created_tickets      Ticket[]          @relation("TicketCreatedBy")
+  updated_tickets      Ticket[]          @relation("TicketUpdatedBy")
+  comments             Comment[]
+  uploaded_attachments Attachment[]
+  activity_logs        Activity_Log[]
+  api_keys             API_Key[]
 }
 
 model Ticket {
@@ -253,7 +250,6 @@ model Ticket {
   created_at   DateTime       @default(now())
   updated_at   DateTime       @updatedAt
 
-  // Relations
   project_id       String
   project          Project  @relation(fields: [project_id], references: [project_id])
   sprint_id        String?
@@ -298,12 +294,12 @@ model Attachment {
   file_url      String
   created_at    DateTime @default(now())
 
-  ticket_id    String?
-  ticket       Ticket?  @relation(fields: [ticket_id], references: [ticket_id])
-  comment_id   String?
-  comment      Comment? @relation(fields: [comment_id], references: [comment_id])
-  uploaded_by  String
-  uploader     User     @relation(fields: [uploaded_by], references: [user_id])
+  ticket_id   String?
+  ticket      Ticket?  @relation(fields: [ticket_id], references: [ticket_id])
+  comment_id  String?
+  comment     Comment? @relation(fields: [comment_id], references: [comment_id])
+  uploaded_by String
+  uploader    User     @relation(fields: [uploaded_by], references: [user_id])
 }
 
 model Label {

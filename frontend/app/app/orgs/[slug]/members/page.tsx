@@ -3,13 +3,20 @@
 import { use, useState } from 'react';
 import useSWR, { mutate } from 'swr';
 import { toast } from 'sonner';
-import { Users, Search, MoreHorizontal, Shield, UserMinus } from 'lucide-react';
+import { Users, Search, MoreHorizontal, Shield, UserMinus, UserPlus, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Field, FieldLabel } from '@/components/ui/field';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import type { OrgMembership, OrgRole } from '@/lib/types';
@@ -53,6 +61,11 @@ export default function MembersPage({
   const [memberToRemove, setMemberToRemove] = useState<OrgMembership | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
 
+  // ── Add member form state ──
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'ADMIN' | 'MEMBER'>('MEMBER');
+  const [isInviting, setIsInviting] = useState(false);
+
   const { data: membersData, isLoading } = useSWR(
     `org-${slug}-members`,
     async () => {
@@ -61,19 +74,13 @@ export default function MembersPage({
     }
   );
 
-  const { data: orgData } = useSWR(`org-${slug}`, async () => {
-    const response = await api.getOrg(slug);
-    return response.data;
-  });
+  const members: OrgMembership[] = membersData?.members ?? (Array.isArray(membersData) ? membersData : []);
 
-  const members = membersData || [];
-  const currentUserMembership = members.find(
-    (m: OrgMembership) => m.user.id === user?.id
-  );
+  const currentUserMembership = members.find((m) => m.user.user_id === user?.user_id);
   const canManageMembers =
     currentUserMembership?.role === 'OWNER' || currentUserMembership?.role === 'ADMIN';
 
-  const filteredMembers = members.filter((membership: OrgMembership) => {
+  const filteredMembers = members.filter((membership) => {
     const fullName = `${membership.user.first_name} ${membership.user.last_name}`.toLowerCase();
     const email = membership.user.email.toLowerCase();
     const query = searchQuery.toLowerCase();
@@ -94,7 +101,7 @@ export default function MembersPage({
     if (!memberToRemove) return;
     setIsRemoving(true);
     try {
-      await api.removeOrgMember(slug, memberToRemove.user.id);
+      await api.removeOrgMember(slug, memberToRemove.user.user_id);
       toast.success('Member removed successfully');
       mutate(`org-${slug}-members`);
     } catch (error) {
@@ -105,17 +112,88 @@ export default function MembersPage({
     }
   };
 
+  const handleInviteMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+    setIsInviting(true);
+    try {
+      await api.addOrgMember(slug, { email: inviteEmail.trim(), role: inviteRole });
+      toast.success(`${inviteEmail} has been added to the organization`);
+      setInviteEmail('');
+      setInviteRole('MEMBER');
+      mutate(`org-${slug}-members`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to add member');
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
   return (
     <div className="p-6 lg:p-8 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Members</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage team members and their roles
-          </p>
+          <p className="text-muted-foreground mt-1">Manage team members and their roles</p>
         </div>
       </div>
+
+      {/* Add Member Card — owners/admins only */}
+      {canManageMembers && (
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>Add Member</CardTitle>
+            </div>
+            <CardDescription>
+              Invite an existing user by their registered email address
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleInviteMember} className="flex flex-col sm:flex-row gap-3 items-end">
+              <Field className="flex-1">
+                <FieldLabel htmlFor="invite-email">Email address</FieldLabel>
+                <Input
+                  id="invite-email"
+                  type="email"
+                  placeholder="colleague@example.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  disabled={isInviting}
+                  className="bg-input border-border"
+                  required
+                />
+              </Field>
+              <Field className="sm:w-40">
+                <FieldLabel htmlFor="invite-role">Role</FieldLabel>
+                <Select
+                  value={inviteRole}
+                  onValueChange={(v) => setInviteRole(v as 'ADMIN' | 'MEMBER')}
+                  disabled={isInviting}
+                >
+                  <SelectTrigger id="invite-role" className="bg-input border-border">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MEMBER">Member</SelectItem>
+                    <SelectItem value="ADMIN">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Button type="submit" disabled={isInviting}>
+                {isInviting ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <UserPlus className="h-4 w-4 mr-2" />
+                )}
+                Add Member
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Search */}
       <div className="relative max-w-sm">
@@ -150,9 +228,9 @@ export default function MembersPage({
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {filteredMembers.map((membership: OrgMembership) => (
+              {filteredMembers.map((membership) => (
                 <div
-                  key={membership.id}
+                  key={`${membership.org_id}-${membership.user_id}`}
                   className="flex items-center justify-between py-4 first:pt-0 last:pb-0"
                 >
                   <div className="flex items-center gap-4">
@@ -167,7 +245,7 @@ export default function MembersPage({
                         <p className="font-medium text-foreground">
                           {membership.user.first_name} {membership.user.last_name}
                         </p>
-                        {membership.user.id === user?.id && (
+                        {membership.user.user_id === user?.user_id && (
                           <Badge variant="outline" className="text-xs">
                             You
                           </Badge>
@@ -181,44 +259,48 @@ export default function MembersPage({
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <Badge className={roleColors[membership.role]}>
-                      {membership.role}
-                    </Badge>
+                    <Badge className={roleColors[membership.role]}>{membership.role}</Badge>
 
-                    {canManageMembers && membership.role !== 'OWNER' && membership.user.id !== user?.id && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {membership.role === 'MEMBER' ? (
+                    {canManageMembers &&
+                      membership.role !== 'OWNER' &&
+                      membership.user.user_id !== user?.user_id && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {membership.role === 'MEMBER' ? (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  handleUpdateRole(membership.user.user_id, 'ADMIN')
+                                }
+                              >
+                                <Shield className="mr-2 h-4 w-4" />
+                                Make Admin
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  handleUpdateRole(membership.user.user_id, 'MEMBER')
+                                }
+                              >
+                                <Shield className="mr-2 h-4 w-4" />
+                                Make Member
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem
-                              onClick={() => handleUpdateRole(membership.user.id, 'ADMIN')}
+                              className="text-destructive"
+                              onClick={() => setMemberToRemove(membership)}
                             >
-                              <Shield className="mr-2 h-4 w-4" />
-                              Make Admin
+                              <UserMinus className="mr-2 h-4 w-4" />
+                              Remove from organization
                             </DropdownMenuItem>
-                          ) : (
-                            <DropdownMenuItem
-                              onClick={() => handleUpdateRole(membership.user.id, 'MEMBER')}
-                            >
-                              <Shield className="mr-2 h-4 w-4" />
-                              Make Member
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-destructive"
-                            onClick={() => setMemberToRemove(membership)}
-                          >
-                            <UserMinus className="mr-2 h-4 w-4" />
-                            Remove from organization
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                   </div>
                 </div>
               ))}

@@ -55,7 +55,7 @@ export default function RegisterPage() {
         last_name: data.last_name,
       });
       toast.success('Account created successfully!');
-      router.push('/app');
+      router.push('/verify-email');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to create account');
     } finally {

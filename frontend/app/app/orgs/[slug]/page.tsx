@@ -1,8 +1,27 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import Link from 'next/link';
-import useSWR from 'swr';
+import useSWR, { mutate } from 'swr';
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Field, FieldLabel } from '@/components/ui/field';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useAuth } from '@/lib/auth-context';
 import {
   Building2,
   FolderKanban,
@@ -13,6 +32,8 @@ import {
   Phone,
   MapPin,
   ArrowRight,
+  Plus,
+  Loader2,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,6 +53,13 @@ export default function OrgOverviewPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
+  const { user } = useAuth();
+  
+  // ── Add member form state ──
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'ADMIN' | 'MEMBER'>('MEMBER');
+  const [isInviting, setIsInviting] = useState(false);
+  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
 
   const { data: orgData, isLoading: orgLoading } = useSWR(`org-${slug}`, async () => {
     const response = await api.getOrg(slug);
@@ -55,8 +83,30 @@ export default function OrgOverviewPage({
   );
 
   const org = orgData;
-  const members = membersData || [];
+  const members = membersData?.members || (Array.isArray(membersData) ? membersData : []);
   const projects = projectsData || [];
+
+  const currentUserMembership = members.find((m: OrgMembership) => m.user.user_id === user?.user_id);
+  const canManageMembers =
+    currentUserMembership?.role === 'OWNER' || currentUserMembership?.role === 'ADMIN';
+
+  const handleInviteMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+    setIsInviting(true);
+    try {
+      await api.addOrgMember(slug, { email: inviteEmail.trim(), role: inviteRole });
+      toast.success(`${inviteEmail} has been added to the organization`);
+      setInviteEmail('');
+      setInviteRole('MEMBER');
+      mutate(`org-${slug}-members`);
+      setIsInviteDialogOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to add member');
+    } finally {
+      setIsInviting(false);
+    }
+  };
 
   if (orgLoading) {
     return (
@@ -209,7 +259,7 @@ export default function OrgOverviewPage({
               <div className="space-y-3">
                 {projects.slice(0, 5).map((project: Project) => (
                   <Link
-                    key={project.id}
+                    key={project.project_id}
                     href={`/app/orgs/${slug}/projects/${project.project_key}/board`}
                     className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors"
                   >
@@ -245,12 +295,73 @@ export default function OrgOverviewPage({
             <CardTitle>Team Members</CardTitle>
             <CardDescription>People in this organization</CardDescription>
           </div>
-          <Link href={`/app/orgs/${slug}/members`}>
-            <Button size="sm" variant="outline">
-              Manage
-              <ArrowRight className="h-4 w-4 ml-1" />
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            {canManageMembers && (
+              <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Member
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add Member</DialogTitle>
+                    <DialogDescription>
+                      Invite an existing user by their registered email address
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleInviteMember} className="space-y-4 pt-4">
+                    <Field>
+                      <FieldLabel htmlFor="invite-email">Email address</FieldLabel>
+                      <Input
+                        id="invite-email"
+                        type="email"
+                        placeholder="colleague@example.com"
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                        disabled={isInviting}
+                        className="bg-input border-border"
+                        required
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="invite-role">Role</FieldLabel>
+                      <Select
+                        value={inviteRole}
+                        onValueChange={(v) => setInviteRole(v as 'ADMIN' | 'MEMBER')}
+                        disabled={isInviting}
+                      >
+                        <SelectTrigger id="invite-role" className="bg-input border-border">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="MEMBER">Member</SelectItem>
+                          <SelectItem value="ADMIN">Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <div className="flex justify-end pt-2">
+                      <Button type="submit" disabled={isInviting}>
+                        {isInviting ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Plus className="h-4 w-4 mr-2" />
+                        )}
+                        Add Member
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            )}
+            <Link href={`/app/orgs/${slug}/members`}>
+              <Button size="sm" variant="outline">
+                Manage
+                <ArrowRight className="h-4 w-4 ml-1" />
+              </Button>
+            </Link>
+          </div>
         </CardHeader>
         <CardContent>
           {membersLoading ? (
@@ -261,7 +372,7 @@ export default function OrgOverviewPage({
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {members.slice(0, 6).map((membership: OrgMembership) => (
                 <div
-                  key={membership.id}
+                  key={membership.user_id}
                   className="flex items-center gap-3 p-3 rounded-lg bg-muted/50"
                 >
                   <Avatar className="h-10 w-10">

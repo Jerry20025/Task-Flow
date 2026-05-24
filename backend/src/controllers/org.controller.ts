@@ -8,13 +8,23 @@ import { generateUniqueSlug } from "../utils/slug";
 
 // ─── CREATE ORG ──────────────────────────────────────────────
 export const createOrg = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { org_name, org_email, phone, website, timezone, address_line1, address_line2, city, state, country, postal_code } = req.body;
+    const {
+        org_name,
+        org_email,
+        phone,
+        website,
+        timezone,
+        address_line1,
+        address_line2,
+        city,
+        state,
+        country,
+        postal_code,
+    } = req.body;
     const userId = req.user!.user_id;
 
-    // Automatically generate a unique slug for the organization based on its name
     const slug = await generateUniqueSlug(org_name);
 
-    // Create org and add creator as an owner member in a transaction
     const org = await prisma.$transaction(async (tx) => {
         const newOrg = await tx.org.create({
             data: {
@@ -34,7 +44,6 @@ export const createOrg = asyncHandler(async (req: AuthRequest, res: Response) =>
             },
         });
 
-        // Add owner as a member
         await tx.org_Members.create({
             data: {
                 org_id: newOrg.org_id,
@@ -49,15 +58,21 @@ export const createOrg = asyncHandler(async (req: AuthRequest, res: Response) =>
     res.status(201).json(new ApiResponse(201, org, "Organization created successfully."));
 });
 
-// ─── GET ORG BY SLUG ─────────────────────────────────────────
+// ─── GET ORG ─────────────────────────────────────────────────
 export const getOrg = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const org = req.org; // Set by orgAccess middleware
+    const org = req.org;
 
     const orgDetails = await prisma.org.findUnique({
         where: { org_id: org.org_id },
         include: {
             owner: {
-                select: { user_id: true, email: true, first_name: true, last_name: true, avatar_url: true },
+                select: {
+                    user_id: true,
+                    email: true,
+                    first_name: true,
+                    last_name: true,
+                    avatar_url: true,
+                },
             },
             _count: {
                 select: { members: true, projects: true },
@@ -71,15 +86,39 @@ export const getOrg = asyncHandler(async (req: AuthRequest, res: Response) => {
 // ─── UPDATE ORG ──────────────────────────────────────────────
 export const updateOrg = asyncHandler(async (req: AuthRequest, res: Response) => {
     const org = req.org;
-    const orgRole = req.orgMember?.role;
 
-    if (orgRole !== "OWNER" && orgRole !== "ADMIN") {
-        throw new ApiError(403, "Only owners and admins can update organization settings.");
-    }
+    // Whitelist fields — never trust req.body spread directly
+    const {
+        org_name,
+        org_email,
+        phone,
+        website,
+        logo_url,
+        timezone,
+        address_line1,
+        address_line2,
+        city,
+        state,
+        country,
+        postal_code,
+    } = req.body;
 
     const updatedOrg = await prisma.org.update({
         where: { org_id: org.org_id },
-        data: { ...req.body },
+        data: {
+            org_name,
+            org_email,
+            phone,
+            website,
+            logo_url,
+            timezone,
+            address_line1,
+            address_line2,
+            city,
+            state,
+            country,
+            postal_code,
+        },
     });
 
     res.json(new ApiResponse(200, updatedOrg, "Organization updated successfully."));
@@ -88,15 +127,8 @@ export const updateOrg = asyncHandler(async (req: AuthRequest, res: Response) =>
 // ─── DELETE ORG ──────────────────────────────────────────────
 export const deleteOrg = asyncHandler(async (req: AuthRequest, res: Response) => {
     const org = req.org;
-    const orgRole = req.orgMember?.role;
 
-    if (orgRole !== "OWNER") {
-        throw new ApiError(403, "Only the organization owner can delete it.");
-    }
-
-    // Cascade delete everything in a transaction
     await prisma.$transaction(async (tx) => {
-        // Delete all nested data
         const projects = await tx.project.findMany({
             where: { org_id: org.org_id },
             select: { project_id: true },
@@ -111,16 +143,17 @@ export const deleteOrg = asyncHandler(async (req: AuthRequest, res: Response) =>
             const ticketIds = tickets.map((t: any) => t.ticket_id);
 
             if (ticketIds.length > 0) {
+                await tx.activity_Log.deleteMany({ where: { entity_id: { in: ticketIds } } });
                 await tx.attachment.deleteMany({ where: { ticket_id: { in: ticketIds } } });
                 await tx.comment.deleteMany({ where: { ticket_id: { in: ticketIds } } });
                 await tx.ticket_Label.deleteMany({ where: { ticket_id: { in: ticketIds } } });
-                await tx.ticket.deleteMany({ where: { ticket_id: { in: ticketIds } } });
+                await tx.ticket.deleteMany({ where: { project_id: { in: projectIds } } });
             }
 
             await tx.label.deleteMany({ where: { project_id: { in: projectIds } } });
             await tx.sprint.deleteMany({ where: { project_id: { in: projectIds } } });
             await tx.project_Members.deleteMany({ where: { project_id: { in: projectIds } } });
-            await tx.project.deleteMany({ where: { project_id: { in: projectIds } } });
+            await tx.project.deleteMany({ where: { org_id: org.org_id } });
         }
 
         await tx.aPI_Key.deleteMany({ where: { org_id: org.org_id } });
@@ -134,22 +167,19 @@ export const deleteOrg = asyncHandler(async (req: AuthRequest, res: Response) =>
 // ─── ADD MEMBER ──────────────────────────────────────────────
 export const addMember = asyncHandler(async (req: AuthRequest, res: Response) => {
     const org = req.org;
-    const orgRole = req.orgMember?.role;
-    const { user_id, role } = req.body;
+    const { email, role } = req.body; // email, not user_id
 
-    if (orgRole !== "OWNER" && orgRole !== "ADMIN") {
-        throw new ApiError(403, "Only owners and admins can add members.");
-    }
-
-    // Verify user exists
-    const user = await prisma.user.findUnique({ where: { user_id } });
+    // Look up user by email
+    const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-        throw new ApiError(404, "User not found.");
+        throw new ApiError(404, "No user found with this email address.");
     }
 
     // Check if already a member
     const existingMembership = await prisma.org_Members.findUnique({
-        where: { org_id_user_id: { org_id: org.org_id, user_id } },
+        where: {
+            org_id_user_id: { org_id: org.org_id, user_id: user.user_id },
+        },
     });
     if (existingMembership) {
         throw new ApiError(409, "User is already a member of this organization.");
@@ -158,12 +188,18 @@ export const addMember = asyncHandler(async (req: AuthRequest, res: Response) =>
     const member = await prisma.org_Members.create({
         data: {
             org_id: org.org_id,
-            user_id,
+            user_id: user.user_id,
             role: role || "MEMBER",
         },
         include: {
             user: {
-                select: { user_id: true, email: true, first_name: true, last_name: true, avatar_url: true },
+                select: {
+                    user_id: true,
+                    email: true,
+                    first_name: true,
+                    last_name: true,
+                    avatar_url: true,
+                },
             },
         },
     });
@@ -174,18 +210,38 @@ export const addMember = asyncHandler(async (req: AuthRequest, res: Response) =>
 // ─── LIST MEMBERS ────────────────────────────────────────────
 export const listMembers = asyncHandler(async (req: AuthRequest, res: Response) => {
     const org = req.org;
+    const pageNum = parseInt(req.query.page as string) || 1;
+    const pageSize = parseInt(req.query.limit as string) || 50;
 
-    const members = await prisma.org_Members.findMany({
-        where: { org_id: org.org_id },
-        include: {
-            user: {
-                select: { user_id: true, email: true, first_name: true, last_name: true, avatar_url: true, status: true },
+    const [members, total] = await Promise.all([
+        prisma.org_Members.findMany({
+            where: { org_id: org.org_id },
+            include: {
+                user: {
+                    select: {
+                        user_id: true,
+                        email: true,
+                        first_name: true,
+                        last_name: true,
+                        avatar_url: true,
+                        status: true,
+                    },
+                },
             },
-        },
-        orderBy: { joined_at: "asc" },
-    });
+            orderBy: { joined_at: "asc" },
+            skip: (pageNum - 1) * pageSize,
+            take: pageSize,
+        }),
+        prisma.org_Members.count({ where: { org_id: org.org_id } }),
+    ]);
 
-    res.json(new ApiResponse(200, members, "Members fetched successfully."));
+    res.json(
+        new ApiResponse(
+            200,
+            { members, pagination: { page: pageNum, limit: pageSize, total, totalPages: Math.ceil(total / pageSize) } },
+            "Members fetched successfully."
+        )
+    );
 });
 
 // ─── UPDATE MEMBER ROLE ──────────────────────────────────────
@@ -195,20 +251,48 @@ export const updateMemberRole = asyncHandler(async (req: AuthRequest, res: Respo
     const { userId } = req.params;
     const { role } = req.body;
 
-    if (orgRole !== "OWNER" && orgRole !== "ADMIN") {
-        throw new ApiError(403, "Only owners and admins can update member roles.");
-    }
-
-    // Cannot change owner's role
     if (userId === org.owner_id) {
         throw new ApiError(400, "Cannot change the owner's role.");
     }
 
-    // Admins cannot promote to OWNER
-    if (role === "OWNER" && orgRole !== "OWNER") {
-        throw new ApiError(403, "Only the owner can assign the OWNER role.");
+    if (role === "OWNER") {
+        if (orgRole !== "OWNER") {
+            throw new ApiError(403, "Only the owner can assign the OWNER role.");
+        }
+
+        // Ownership transfer transaction
+        const member = await prisma.$transaction(async (tx) => {
+            // Demote current owner to ADMIN
+            await tx.org_Members.update({
+                where: { org_id_user_id: { org_id: org.org_id, user_id: org.owner_id } },
+                data: { role: "ADMIN" },
+            });
+
+            // Promote new user to OWNER
+            const newOwner = await tx.org_Members.update({
+                where: { org_id_user_id: { org_id: org.org_id, user_id: userId } },
+                data: { role: "OWNER" },
+                include: {
+                    user: {
+                        select: { user_id: true, email: true, first_name: true, last_name: true },
+                    },
+                },
+            });
+
+            // Update org's owner_id
+            await tx.org.update({
+                where: { org_id: org.org_id },
+                data: { owner_id: userId },
+            });
+
+            return newOwner;
+        });
+
+        res.json(new ApiResponse(200, member, "Ownership transferred successfully."));
+        return;
     }
 
+    // Normal role update
     const member = await prisma.org_Members.update({
         where: { org_id_user_id: { org_id: org.org_id, user_id: userId } },
         data: { role },
@@ -225,12 +309,7 @@ export const updateMemberRole = asyncHandler(async (req: AuthRequest, res: Respo
 // ─── REMOVE MEMBER ───────────────────────────────────────────
 export const removeMember = asyncHandler(async (req: AuthRequest, res: Response) => {
     const org = req.org;
-    const orgRole = req.orgMember?.role;
     const { userId } = req.params;
-
-    if (orgRole !== "OWNER" && orgRole !== "ADMIN") {
-        throw new ApiError(403, "Only owners and admins can remove members.");
-    }
 
     if (userId === org.owner_id) {
         throw new ApiError(400, "Cannot remove the organization owner.");

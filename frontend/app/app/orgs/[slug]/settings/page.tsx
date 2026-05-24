@@ -7,12 +7,19 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import useSWR, { mutate } from 'swr';
-import { Loader2, Building2, Trash2, ArrowLeft } from 'lucide-react';
+import { Loader2, Building2, Trash2, ArrowLeft, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field, FieldGroup, FieldLabel, FieldMessage } from '@/components/ui/field';
 import { Spinner } from '@/components/ui/spinner';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,6 +59,8 @@ export default function OrgSettingsPage({
   const { user } = useAuth();
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isTransferring, setIsTransferring] = useState(false);
+  const [transferToUserId, setTransferToUserId] = useState('');
 
   const { data: orgData, isLoading } = useSWR(`org-${slug}`, async () => {
     const response = await api.getOrg(slug);
@@ -64,12 +73,17 @@ export default function OrgSettingsPage({
   });
 
   const org = orgData;
-  const members = membersData || [];
+  const members: OrgMembership[] = membersData?.members || (Array.isArray(membersData) ? membersData : []);
   const currentUserMembership = members.find(
-    (m: OrgMembership) => m.user.id === user?.id
+    (m: OrgMembership) => m.user.user_id === user?.user_id
   );
   const isOwner = currentUserMembership?.role === 'OWNER';
   const canEdit = isOwner || currentUserMembership?.role === 'ADMIN';
+
+  // Members that can receive ownership (all non-owner members)
+  const transferCandidates = members.filter(
+    (m: OrgMembership) => m.role !== 'OWNER'
+  );
 
   const {
     register,
@@ -119,6 +133,38 @@ export default function OrgSettingsPage({
     }
   };
 
+  const handleTransferOwnership = async () => {
+    if (!transferToUserId) return;
+    setIsTransferring(true);
+    try {
+      await api.updateOrgMember(slug, transferToUserId, { role: 'ADMIN' });
+      // Now promote the selected user to OWNER via a role reassignment
+      // The backend updateMemberRole allows setting OWNER only if current user is OWNER
+      // We call the backend directly with OWNER role for the target user
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1'}/orgs/${slug}/members/${transferToUserId}`,
+        {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: 'OWNER' }),
+        }
+      );
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Transfer failed');
+      }
+      toast.success('Ownership transferred successfully. You are now an Admin.');
+      mutate(`org-${slug}-members`);
+      mutate(`org-${slug}`);
+      setTransferToUserId('');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to transfer ownership');
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -136,7 +182,7 @@ export default function OrgSettingsPage({
   }
 
   return (
-    <div className="p-6 lg:p-8 max-w-3xl mx-auto space-y-8">
+    <div className="p-6 lg:p-8 space-y-8">
       {/* Header */}
       <div>
         <Button
@@ -155,16 +201,20 @@ export default function OrgSettingsPage({
       </div>
 
       {/* Organization Info */}
-      <Card className="bg-card border-border">
-        <CardHeader>
-          <div className="flex items-center gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="md:col-span-1 space-y-2">
+          <div className="flex items-center gap-2 text-foreground font-semibold text-lg">
             <Building2 className="h-5 w-5 text-muted-foreground" />
-            <CardTitle>Organization Details</CardTitle>
+            <h2>Organization Details</h2>
           </div>
-          <CardDescription>Update your organization information</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          <p className="text-sm text-muted-foreground">
+            Update your organization information, contact details, and physical address.
+          </p>
+        </div>
+        <div className="md:col-span-2">
+          <Card className="bg-card border-border">
+            <CardContent className="p-6">
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="org_name">Organization Name *</FieldLabel>
@@ -272,7 +322,7 @@ export default function OrgSettingsPage({
             </FieldGroup>
 
             {canEdit && (
-              <div className="flex justify-end">
+              <div className="flex justify-end pt-4">
                 <Button type="submit" disabled={isUpdating}>
                   {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Changes
@@ -280,20 +330,101 @@ export default function OrgSettingsPage({
               </div>
             )}
           </form>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
-      {/* Danger Zone */}
+      {/* Danger Zone — owners only */}
       {isOwner && (
-        <Card className="bg-card border-destructive/50">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Trash2 className="h-5 w-5 text-destructive" />
-              <CardTitle className="text-destructive">Danger Zone</CardTitle>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-8 border-t border-border">
+          <div className="md:col-span-1 space-y-2">
+            <div className="flex items-center gap-2 text-destructive font-semibold text-lg">
+              <Trash2 className="h-5 w-5" />
+              <h2>Danger Zone</h2>
             </div>
-            <CardDescription>Irreversible and destructive actions</CardDescription>
-          </CardHeader>
-          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Irreversible and destructive actions. Transfer ownership or permanently delete this organization.
+            </p>
+          </div>
+          <div className="md:col-span-2">
+            <Card className="bg-card border-destructive/50">
+              <CardContent className="p-6 space-y-6">
+
+            {/* Transfer Ownership */}
+            <div className="pb-6 border-b border-border space-y-3">
+              <div className="flex items-center gap-2">
+                <Crown className="h-4 w-4 text-amber-500" />
+                <p className="font-medium text-foreground">Transfer Ownership</p>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Transfer this organization to another member. You will become an Admin.
+              </p>
+              {transferCandidates.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic">
+                  No other members to transfer ownership to. Add members first.
+                </p>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-3 items-end">
+                  <Field className="flex-1">
+                    <FieldLabel htmlFor="transfer-to">Transfer to</FieldLabel>
+                    <Select value={transferToUserId} onValueChange={setTransferToUserId}>
+                      <SelectTrigger id="transfer-to" className="bg-input border-border">
+                        <SelectValue placeholder="Select a member..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {transferCandidates.map((m: OrgMembership) => (
+                          <SelectItem key={m.user.user_id} value={m.user.user_id}>
+                            {m.user.first_name} {m.user.last_name} ({m.user.email})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="border-amber-500 text-amber-500 hover:bg-amber-500/10"
+                        disabled={!transferToUserId || isTransferring}
+                      >
+                        {isTransferring ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Crown className="h-4 w-4 mr-2" />
+                        )}
+                        Transfer
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Transfer Ownership?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          You are about to transfer ownership of <strong>{org.org_name}</strong> to{' '}
+                          <strong>
+                            {transferCandidates.find((m) => m.user.user_id === transferToUserId)?.user.first_name}{' '}
+                            {transferCandidates.find((m) => m.user.user_id === transferToUserId)?.user.last_name}
+                          </strong>
+                          . You will become an Admin and lose owner privileges.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleTransferOwnership}
+                          disabled={isTransferring}
+                          className="bg-amber-500 text-white hover:bg-amber-600"
+                        >
+                          Yes, Transfer Ownership
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              )}
+            </div>
+
+            {/* Delete Organization */}
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-foreground">Delete organization</p>
@@ -326,8 +457,10 @@ export default function OrgSettingsPage({
                 </AlertDialogContent>
               </AlertDialog>
             </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       )}
     </div>
   );

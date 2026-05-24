@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowLeft, Building2, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -62,7 +62,7 @@ export default function NewOrganizationPage() {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-2xl mx-auto space-y-6">
+    <div className="p-6 lg:p-8 space-y-8">
       {/* Header */}
       <div>
         <Button
@@ -74,21 +74,49 @@ export default function NewOrganizationPage() {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </Button>
-        <h1 className="text-2xl font-bold text-foreground">Create Organization</h1>
+        <h1 className="text-3xl font-bold text-foreground">Create Organization</h1>
         <p className="text-muted-foreground mt-1">
-          Set up a new workspace for your team
+          Set up a new workspace for your team to manage projects and tickets.
         </p>
       </div>
 
-      <Card className="bg-card border-border">
-        <CardHeader>
-          <CardTitle>Organization Details</CardTitle>
-          <CardDescription>
-            Enter the basic information for your new organization
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Side: Information */}
+        <div className="lg:col-span-1 space-y-6">
+          <div>
+            <div className="flex items-center gap-2 text-foreground font-semibold text-lg mb-2">
+              <Building2 className="h-5 w-5 text-primary" />
+              <h2>Organization Profile</h2>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Your organization is your team's central hub. All your projects, team members, and settings will live here.
+            </p>
+          </div>
+
+          <div className="p-5 bg-primary/5 rounded-xl border border-primary/10 space-y-3">
+            <h3 className="font-medium text-foreground">What you'll get:</h3>
+            <ul className="space-y-3">
+              <li className="flex items-start gap-3 text-sm text-muted-foreground">
+                <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
+                <span><strong>Unlimited Projects</strong> to organize all your team's initiatives.</span>
+              </li>
+              <li className="flex items-start gap-3 text-sm text-muted-foreground">
+                <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
+                <span><strong>Agile Boards</strong> for every project to track progress effortlessly.</span>
+              </li>
+              <li className="flex items-start gap-3 text-sm text-muted-foreground">
+                <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
+                <span><strong>Role-based Access</strong> to safely manage team members and permissions.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Right Side: Form */}
+        <div className="lg:col-span-2">
+          <Card className="bg-card border-border shadow-sm">
+            <CardContent className="p-6 md:p-8">
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="org_name">Organization Name *</FieldLabel>
@@ -204,23 +232,25 @@ export default function NewOrganizationPage() {
               </div>
             </FieldGroup>
 
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+            <div className="flex items-center justify-end gap-3 pt-6 border-t border-border mt-8">
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 onClick={() => router.back()}
                 disabled={isLoading}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isLoading}>
+              <Button type="submit" disabled={isLoading} className="px-8">
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Create Organization
               </Button>
             </div>
           </form>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

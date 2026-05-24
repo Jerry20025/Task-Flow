@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { Empty } from '@/components/ui/empty';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { api } from '@/lib/api';
 import type { Organization, OrgRole } from '@/lib/types';
 
@@ -62,28 +62,30 @@ export default function OrganizationsPage() {
           <Spinner className="h-8 w-8" />
         </div>
       ) : filteredOrgs.length === 0 ? (
-        <Empty
-          icon={Building2}
-          title={searchQuery ? 'No organizations found' : 'No organizations yet'}
-          description={
-            searchQuery
-              ? 'Try adjusting your search query'
-              : 'Create your first organization to get started'
-          }
-          action={
-            !searchQuery && (
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon"><Building2 /></EmptyMedia>
+            <EmptyTitle>{searchQuery ? 'No organizations found' : 'No organizations yet'}</EmptyTitle>
+            <EmptyDescription>
+              {searchQuery
+                ? 'Try adjusting your search query'
+                : 'Create your first organization to get started'}
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            {!searchQuery && (
               <Button onClick={() => router.push('/app/orgs/new')}>
                 <Plus className="h-4 w-4 mr-2" />
                 Create Organization
               </Button>
-            )
-          }
-        />
+            )}
+          </EmptyContent>
+        </Empty>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredOrgs.map((org: Organization & { my_role: OrgRole }) => (
+          {filteredOrgs.map((org: Organization & { my_role?: OrgRole }) => (
             <Card
-              key={org.id}
+              key={org.org_id}
               className="bg-card border-border hover:border-primary/50 transition-colors cursor-pointer group"
               onClick={() => router.push(`/app/orgs/${org.slug}`)}
             >

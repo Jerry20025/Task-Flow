@@ -10,14 +10,23 @@ import prisma from "../lib/prisma";
 export const createProject = asyncHandler(async (req: AuthRequest, res: Response) => {
     const org = req.org;
     const userId = req.user!.user_id;
-    const { project_key, project_name, description, status, start_date, end_date } = req.body;
+    const { project_name, description, start_date, end_date } = req.body;
 
-    // Check uniqueness of project_key within org
+    // Auto-generate project_key from name if not provided
+    let project_key = req.body.project_key;
+    if (!project_key) {
+        project_key = project_name
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, "")
+            .slice(0, 6) || "PROJ";
+    }
+
+    // Ensure project_key uniqueness within org
     const existing = await prisma.project.findUnique({
         where: { org_id_project_key: { org_id: org.org_id, project_key } },
     });
     if (existing) {
-        throw new ApiError(409, "A project with this key already exists in this organization.");
+        throw new ApiError(409, `A project with key "${project_key}" already exists in this organization.`);
     }
 
     const project = await prisma.$transaction(async (tx) => {
@@ -26,7 +35,7 @@ export const createProject = asyncHandler(async (req: AuthRequest, res: Response
                 project_key,
                 project_name,
                 description,
-                status,
+                status: "ACTIVE",
                 start_date: start_date ? new Date(start_date) : undefined,
                 end_date: end_date ? new Date(end_date) : undefined,
                 org_id: org.org_id,
@@ -34,7 +43,7 @@ export const createProject = asyncHandler(async (req: AuthRequest, res: Response
             },
         });
 
-        // Add creator as manager
+        // Add creator as manager automatically
         await tx.project_Members.create({
             data: {
                 project_id: newProject.project_id,
@@ -46,14 +55,14 @@ export const createProject = asyncHandler(async (req: AuthRequest, res: Response
         return newProject;
     });
 
-    await logActivity({
+    logActivity({
         entityType: "PROJECT",
         entityId: project.project_id,
         action: "CREATED",
         performedById: userId,
         newValue: { project_key, project_name },
         description: `Project "${project_name}" (${project_key}) created.`,
-    });
+    }).catch(console.error);
 
     res.status(201).json(new ApiResponse(201, project, "Project created successfully."));
 });
@@ -76,7 +85,12 @@ export const listProjects = asyncHandler(async (req: AuthRequest, res: Response)
         where,
         include: {
             created_by: {
-                select: { user_id: true, first_name: true, last_name: true, avatar_url: true },
+                select: {
+                    user_id: true,
+                    first_name: true,
+                    last_name: true,
+                    avatar_url: true,
+                },
             },
             _count: {
                 select: { members: true, tickets: true, sprints: true },
@@ -96,7 +110,13 @@ export const getProject = asyncHandler(async (req: AuthRequest, res: Response) =
         where: { project_id: project.project_id },
         include: {
             created_by: {
-                select: { user_id: true, email: true, first_name: true, last_name: true, avatar_url: true },
+                select: {
+                    user_id: true,
+                    email: true,
+                    first_name: true,
+                    last_name: true,
+                    avatar_url: true,
+                },
             },
             updated_by: {
                 select: { user_id: true, email: true, first_name: true, last_name: true },
@@ -134,7 +154,7 @@ export const updateProject = asyncHandler(async (req: AuthRequest, res: Response
         },
     });
 
-    await logActivity({
+    logActivity({
         entityType: "PROJECT",
         entityId: project.project_id,
         action: "UPDATED",
@@ -142,7 +162,7 @@ export const updateProject = asyncHandler(async (req: AuthRequest, res: Response
         oldValue: { project_name: project.project_name, status: project.status },
         newValue: req.body,
         description: `Project "${updatedProject.project_name}" updated.`,
-    });
+    }).catch(console.error);
 
     res.json(new ApiResponse(200, updatedProject, "Project updated successfully."));
 });
@@ -164,6 +184,7 @@ export const deleteProject = asyncHandler(async (req: AuthRequest, res: Response
         const ticketIds = tickets.map((t: any) => t.ticket_id);
 
         if (ticketIds.length > 0) {
+            await tx.activity_Log.deleteMany({ where: { entity_id: { in: ticketIds } } });
             await tx.attachment.deleteMany({ where: { ticket_id: { in: ticketIds } } });
             await tx.comment.deleteMany({ where: { ticket_id: { in: ticketIds } } });
             await tx.ticket_Label.deleteMany({ where: { ticket_id: { in: ticketIds } } });
@@ -184,23 +205,36 @@ export const addProjectMember = asyncHandler(async (req: AuthRequest, res: Respo
     const project = req.project;
     const org = req.org;
     const projectRole = req.projectMember?.role;
-    const { user_id, role } = req.body;
+    const { email, role } = req.body; // email not user_id
 
     if (projectRole !== "MANAGER") {
         throw new ApiError(403, "Only project managers can add members.");
     }
 
-    // Verify user is an org member
+    // Look up user by email
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+        throw new ApiError(404, "No user found with this email address.");
+    }
+
+    // User must be an org member first
     const orgMember = await prisma.org_Members.findUnique({
-        where: { org_id_user_id: { org_id: org.org_id, user_id } },
+        where: {
+            org_id_user_id: { org_id: org.org_id, user_id: user.user_id },
+        },
     });
     if (!orgMember) {
-        throw new ApiError(400, "User must be an organization member first.");
+        throw new ApiError(400, "User must be an organization member before being added to a project.");
     }
 
     // Check if already a project member
     const existingMember = await prisma.project_Members.findUnique({
-        where: { project_id_user_id: { project_id: project.project_id, user_id } },
+        where: {
+            project_id_user_id: {
+                project_id: project.project_id,
+                user_id: user.user_id,
+            },
+        },
     });
     if (existingMember) {
         throw new ApiError(409, "User is already a member of this project.");
@@ -209,12 +243,18 @@ export const addProjectMember = asyncHandler(async (req: AuthRequest, res: Respo
     const member = await prisma.project_Members.create({
         data: {
             project_id: project.project_id,
-            user_id,
+            user_id: user.user_id,
             role: role || "DEVELOPER",
         },
         include: {
             user: {
-                select: { user_id: true, email: true, first_name: true, last_name: true, avatar_url: true },
+                select: {
+                    user_id: true,
+                    email: true,
+                    first_name: true,
+                    last_name: true,
+                    avatar_url: true,
+                },
             },
         },
     });
@@ -230,7 +270,14 @@ export const listProjectMembers = asyncHandler(async (req: AuthRequest, res: Res
         where: { project_id: project.project_id },
         include: {
             user: {
-                select: { user_id: true, email: true, first_name: true, last_name: true, avatar_url: true, status: true },
+                select: {
+                    user_id: true,
+                    email: true,
+                    first_name: true,
+                    last_name: true,
+                    avatar_url: true,
+                    status: true,
+                },
             },
         },
         orderBy: { joined_at: "asc" },
@@ -265,7 +312,7 @@ export const updateProjectMemberRole = asyncHandler(async (req: AuthRequest, res
     res.json(new ApiResponse(200, member, "Member role updated successfully."));
 });
 
-// ─── REMOVE PROJECT MEMBER ──────────────────────────────────
+// ─── REMOVE PROJECT MEMBER ───────────────────────────────────
 export const removeProjectMember = asyncHandler(async (req: AuthRequest, res: Response) => {
     const project = req.project;
     const projectRole = req.projectMember?.role;
@@ -275,7 +322,6 @@ export const removeProjectMember = asyncHandler(async (req: AuthRequest, res: Re
         throw new ApiError(403, "Only project managers can remove members.");
     }
 
-    // Cannot remove the creator
     if (userId === project.created_by_id) {
         throw new ApiError(400, "Cannot remove the project creator.");
     }

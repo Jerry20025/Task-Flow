@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import useSWR, { mutate } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Search, Filter, MoreHorizontal, ChevronDown, ChevronRight } from 'lucide-react';
@@ -34,7 +35,6 @@ import {
 import { api } from '@/lib/api';
 import type { Ticket, Sprint, TicketPriority, TicketType, TicketStatus } from '@/lib/types';
 import { TicketForm } from '@/components/ticket-form';
-import { TicketDetailModal } from '@/components/ticket-detail-modal';
 
 const priorityColors: Record<TicketPriority, string> = {
   LOW: 'bg-muted text-muted-foreground',
@@ -68,11 +68,11 @@ export default function BacklogPage({
   params: Promise<{ slug: string; projectKey: string }>;
 }) {
   const { slug, projectKey } = use(params);
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [expandedSprints, setExpandedSprints] = useState<Set<string>>(new Set(['backlog']));
 
   const { data: ticketsData, isLoading: ticketsLoading } = useSWR(
@@ -97,7 +97,7 @@ export default function BacklogPage({
   const filteredTickets = tickets.filter((ticket: Ticket) => {
     const matchesSearch =
       ticket.ticket_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.ticket_key.toLowerCase().includes(searchQuery.toLowerCase());
+      ticket.ticket_id.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesType = typeFilter === 'all' || ticket.ticket_type === typeFilter;
     const matchesPriority = priorityFilter === 'all' || ticket.priority === priorityFilter;
     return matchesSearch && matchesType && matchesPriority;
@@ -136,13 +136,13 @@ export default function BacklogPage({
   const TicketRow = ({ ticket }: { ticket: Ticket }) => (
     <div
       className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-muted/50 cursor-pointer transition-colors"
-      onClick={() => setSelectedTicket(ticket)}
+      onClick={() => router.push(`/app/orgs/${slug}/projects/${projectKey}/ticket/${ticket.ticket_id}`)}
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">
         <Badge className={typeColors[ticket.ticket_type]} variant="secondary">
           {ticket.ticket_type}
         </Badge>
-        <span className="text-sm text-muted-foreground shrink-0">{ticket.ticket_key}</span>
+        <span className="text-sm text-muted-foreground shrink-0">{projectKey}-{ticket.ticket_id.substring(0, 8)}</span>
         <span className="text-sm font-medium text-foreground truncate">{ticket.ticket_name}</span>
       </div>
       <div className="flex items-center gap-3 shrink-0">
@@ -175,17 +175,17 @@ export default function BacklogPage({
             {ticket.sprint_id && (
               <DropdownMenuItem onClick={(e) => {
                 e.stopPropagation();
-                handleMoveToSprint(ticket.id, null);
+                handleMoveToSprint(ticket.ticket_id, null);
               }}>
                 Move to Backlog
               </DropdownMenuItem>
             )}
-            {sprints.filter((s: Sprint) => s.id !== ticket.sprint_id).map((sprint: Sprint) => (
+            {sprints.filter((s: Sprint) => s.sprint_id !== ticket.sprint_id).map((sprint: Sprint) => (
               <DropdownMenuItem
-                key={sprint.id}
+                key={sprint.sprint_id}
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleMoveToSprint(ticket.id, sprint.id);
+                  handleMoveToSprint(ticket.ticket_id, sprint.sprint_id);
                 }}
               >
                 Move to {sprint.sprint_name}
@@ -261,18 +261,18 @@ export default function BacklogPage({
         <div className="space-y-4">
           {/* Sprints */}
           {sprints.map((sprint: Sprint) => {
-            const sprintTickets = getSprintTickets(sprint.id);
-            const isExpanded = expandedSprints.has(sprint.id);
+            const sprintTickets = getSprintTickets(sprint.sprint_id);
+            const isExpanded = expandedSprints.has(sprint.sprint_id);
             const totalPoints = sprintTickets.reduce(
               (sum: number, t: Ticket) => sum + (t.story_points || 0),
               0
             );
 
             return (
-              <Card key={sprint.id} className="bg-card border-border">
+              <Card key={sprint.sprint_id} className="bg-card border-border">
                 <CardHeader
                   className="py-3 cursor-pointer"
-                  onClick={() => toggleSprint(sprint.id)}
+                  onClick={() => toggleSprint(sprint.sprint_id)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -298,7 +298,7 @@ export default function BacklogPage({
                       </p>
                     ) : (
                       sprintTickets.map((ticket: Ticket) => (
-                        <TicketRow key={ticket.id} ticket={ticket} />
+                        <TicketRow key={ticket.ticket_id} ticket={ticket} />
                       ))
                     )}
                   </CardContent>
@@ -335,7 +335,7 @@ export default function BacklogPage({
                   </p>
                 ) : (
                   backlogTickets.map((ticket: Ticket) => (
-                    <TicketRow key={ticket.id} ticket={ticket} />
+                    <TicketRow key={ticket.ticket_id} ticket={ticket} />
                   ))
                 )}
               </CardContent>
@@ -359,18 +359,6 @@ export default function BacklogPage({
           />
         </DialogContent>
       </Dialog>
-
-      {/* Ticket Detail Modal */}
-      {selectedTicket && (
-        <TicketDetailModal
-          slug={slug}
-          projectKey={projectKey}
-          ticket={selectedTicket}
-          open={!!selectedTicket}
-          onOpenChange={(open) => !open && setSelectedTicket(null)}
-          onUpdate={() => mutate(`project-${slug}-${projectKey}-tickets`)}
-        />
-      )}
     </div>
   );
 }

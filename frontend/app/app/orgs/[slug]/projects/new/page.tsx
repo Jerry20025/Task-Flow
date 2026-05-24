@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowLeft, FolderKanban, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -25,7 +25,7 @@ import { mutate } from 'swr';
 const createProjectSchema = z.object({
   project_key: z
     .string()
-    .min(1, 'Project key is required')
+    .min(2, 'Project key must be at least 2 characters')
     .max(10, 'Project key must be 10 characters or less')
     .regex(/^[A-Z][A-Z0-9]*$/, 'Must start with a letter and be uppercase'),
   project_name: z.string().min(1, 'Project name is required'),
@@ -81,7 +81,7 @@ export default function NewProjectPage({
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-2xl mx-auto space-y-6">
+    <div className="p-6 lg:p-8 space-y-8">
       {/* Header */}
       <div>
         <Button
@@ -93,21 +93,47 @@ export default function NewProjectPage({
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </Button>
-        <h1 className="text-2xl font-bold text-foreground">Create Project</h1>
+        <h1 className="text-3xl font-bold text-foreground">Create Project</h1>
         <p className="text-muted-foreground mt-1">
-          Set up a new project to organize your tasks
+          Set up a new project to organize your team's tasks and sprints.
         </p>
       </div>
 
-      <Card className="bg-card border-border">
-        <CardHeader>
-          <CardTitle>Project Details</CardTitle>
-          <CardDescription>
-            Enter the basic information for your new project
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-1 space-y-6">
+          <div>
+            <div className="flex items-center gap-2 text-foreground font-semibold text-lg mb-2">
+              <FolderKanban className="h-5 w-5 text-primary" />
+              <h2>Project Setup</h2>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              A project contains all your tickets, agile boards, and sprints. Give it a clear name and a recognizable key.
+            </p>
+          </div>
+
+          <div className="p-5 bg-primary/5 rounded-xl border border-primary/10 space-y-3">
+            <h3 className="font-medium text-foreground">Project Features:</h3>
+            <ul className="space-y-3">
+              <li className="flex items-start gap-3 text-sm text-muted-foreground">
+                <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
+                <span><strong>Custom Boards</strong> to visualize your workflow.</span>
+              </li>
+              <li className="flex items-start gap-3 text-sm text-muted-foreground">
+                <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
+                <span><strong>Sprints & Backlogs</strong> to plan and prioritize work effectively.</span>
+              </li>
+              <li className="flex items-start gap-3 text-sm text-muted-foreground">
+                <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
+                <span><strong>Team Collaboration</strong> with comments and assignments.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="lg:col-span-2">
+          <Card className="bg-card border-border shadow-sm">
+            <CardContent className="p-6 md:p-8">
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <FieldGroup>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Field>
@@ -197,23 +223,25 @@ export default function NewProjectPage({
               </div>
             </FieldGroup>
 
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+            <div className="flex items-center justify-end gap-3 pt-6 border-t border-border mt-8">
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 onClick={() => router.back()}
                 disabled={isLoading}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isLoading}>
+              <Button type="submit" disabled={isLoading} className="px-8">
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Create Project
               </Button>
             </div>
           </form>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

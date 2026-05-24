@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { Empty } from '@/components/ui/empty';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import {
   Select,
   SelectContent,
@@ -104,28 +104,30 @@ export default function ProjectsPage({
           <Spinner className="h-8 w-8" />
         </div>
       ) : filteredProjects.length === 0 ? (
-        <Empty
-          icon={FolderKanban}
-          title={searchQuery || statusFilter !== 'all' ? 'No projects found' : 'No projects yet'}
-          description={
-            searchQuery || statusFilter !== 'all'
-              ? 'Try adjusting your filters'
-              : 'Create your first project to start tracking tasks'
-          }
-          action={
-            !searchQuery && statusFilter === 'all' && (
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon"><FolderKanban /></EmptyMedia>
+            <EmptyTitle>{searchQuery || statusFilter !== 'all' ? 'No projects found' : 'No projects yet'}</EmptyTitle>
+            <EmptyDescription>
+              {searchQuery || statusFilter !== 'all'
+                ? 'Try adjusting your filters'
+                : 'Create your first project to start tracking tasks'}
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            {!searchQuery && statusFilter === 'all' && (
               <Button onClick={() => router.push(`/app/orgs/${slug}/projects/new`)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Create Project
               </Button>
-            )
-          }
-        />
+            )}
+          </EmptyContent>
+        </Empty>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredProjects.map((project: Project) => (
             <Card
-              key={project.id}
+              key={project.project_id}
               className="bg-card border-border hover:border-primary/50 transition-colors cursor-pointer group"
               onClick={() => router.push(`/app/orgs/${slug}/projects/${project.project_key}/board`)}
             >

@@ -187,9 +187,11 @@ function FieldError({
   className,
   children,
   errors,
+  variant,
   ...props
 }: React.ComponentProps<'div'> & {
   errors?: Array<{ message?: string } | undefined>
+  variant?: 'error' | 'warning' | 'info'
 }) {
   const content = useMemo(() => {
     if (children) {
@@ -222,7 +224,13 @@ function FieldError({
     <div
       role="alert"
       data-slot="field-error"
-      className={cn('text-destructive text-sm font-normal', className)}
+      className={cn(
+        'text-sm font-normal',
+        variant === 'error' || !variant ? 'text-destructive' : '',
+        variant === 'warning' ? 'text-orange-500' : '',
+        variant === 'info' ? 'text-blue-500' : '',
+        className,
+      )}
       {...props}
     >
       {content}
@@ -230,11 +238,16 @@ function FieldError({
   )
 }
 
+// FieldMessage is an alias for FieldError
+// All pages use FieldMessage — this keeps both names working
+const FieldMessage = FieldError
+
 export {
   Field,
   FieldLabel,
   FieldDescription,
   FieldError,
+  FieldMessage,
   FieldGroup,
   FieldLegend,
   FieldSeparator,

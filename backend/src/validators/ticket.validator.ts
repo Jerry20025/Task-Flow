@@ -7,7 +7,7 @@ export const createTicketSchema = {
         ticket_type: z.enum(["BUG", "STORY", "TASK", "EPIC"]).default("TASK"),
         priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).default("MEDIUM"),
         story_points: z.number().int().min(0).max(100).optional(),
-        due_date: z.string().datetime().optional(),
+        due_date: z.string().optional(),
         assignee_id: z.string().uuid().optional(),
         sprint_id: z.string().uuid().optional(),
         parent_ticket_id: z.string().uuid().optional(),
@@ -21,7 +21,7 @@ export const updateTicketSchema = {
         ticket_type: z.enum(["BUG", "STORY", "TASK", "EPIC"]).optional(),
         priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
         story_points: z.number().int().min(0).max(100).optional(),
-        due_date: z.string().datetime().optional(),
+        due_date: z.string().optional(),
     }),
 };
 

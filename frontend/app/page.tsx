@@ -43,6 +43,9 @@ export default function LandingPage() {
               <span className="text-xl font-bold text-foreground">TaskFlow</span>
             </div>
             <div className="flex items-center gap-4">
+              <Link href="/pricing">
+                <Button variant="ghost">Pricing</Button>
+              </Link>
               <Link href="/login">
                 <Button variant="ghost">Sign In</Button>
               </Link>
@@ -53,7 +56,7 @@ export default function LandingPage() {
           </div>
         </div>
       </header>
-
+      
       {/* Hero */}
       <section className="py-20 lg:py-32">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">

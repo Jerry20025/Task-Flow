@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Check, ChevronsUpDown } from 'lucide-react';
 import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import { api } from '@/lib/api';
 import type { ProjectMembership, Sprint, Ticket } from '@/lib/types';
 
@@ -99,7 +112,7 @@ export function TicketForm({ slug, projectKey, ticket, onSuccess, onCancel }: Ti
       };
 
       if (isEditing) {
-        await api.updateTicket(slug, projectKey, ticket.id, cleanData);
+        await api.updateTicket(slug, projectKey, ticket.ticket_id, cleanData);
         toast.success('Ticket updated successfully!');
       } else {
         await api.createTicket(slug, projectKey, cleanData as Parameters<typeof api.createTicket>[2]);
@@ -210,23 +223,60 @@ export function TicketForm({ slug, projectKey, ticket, onSuccess, onCancel }: Ti
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field>
             <FieldLabel htmlFor="assignee_id">Assignee</FieldLabel>
-            <Select
-              value={assigneeId || 'unassigned'}
-              onValueChange={(value) => setValue('assignee_id', value === 'unassigned' ? '' : value)}
-              disabled={isLoading}
-            >
-              <SelectTrigger className="bg-input border-border">
-                <SelectValue placeholder="Select assignee" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="unassigned">Unassigned</SelectItem>
-                {members.map((member: ProjectMembership) => (
-                  <SelectItem key={member.user.id} value={member.user.id}>
-                    {member.user.first_name} {member.user.last_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  disabled={isLoading}
+                  className="w-full justify-between bg-input border-border font-normal"
+                >
+                  {assigneeId
+                    ? members.find((m: ProjectMembership) => m.user.user_id === assigneeId)?.user.first_name +
+                      ' ' +
+                      members.find((m: ProjectMembership) => m.user.user_id === assigneeId)?.user.last_name
+                    : 'Select assignee'}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0 border-border" align="start">
+                <Command>
+                  <CommandInput placeholder="Search employee..." className="h-9" />
+                  <CommandList>
+                    <CommandEmpty>No employee found.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="unassigned"
+                        onSelect={() => {
+                          setValue('assignee_id', '');
+                        }}
+                      >
+                        Unassigned
+                        <Check
+                          className={`ml-auto h-4 w-4 ${!assigneeId ? 'opacity-100' : 'opacity-0'}`}
+                        />
+                      </CommandItem>
+                      {members.map((member: ProjectMembership) => (
+                        <CommandItem
+                          key={member.user.user_id}
+                          value={member.user.first_name + ' ' + member.user.last_name}
+                          onSelect={() => {
+                            setValue('assignee_id', member.user.user_id);
+                          }}
+                        >
+                          {member.user.first_name} {member.user.last_name}
+                          <Check
+                            className={`ml-auto h-4 w-4 ${
+                              assigneeId === member.user.user_id ? 'opacity-100' : 'opacity-0'
+                            }`}
+                          />
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </Field>
 
           <Field>
@@ -242,7 +292,7 @@ export function TicketForm({ slug, projectKey, ticket, onSuccess, onCancel }: Ti
               <SelectContent>
                 <SelectItem value="backlog">Backlog</SelectItem>
                 {sprints.map((sprint: Sprint) => (
-                  <SelectItem key={sprint.id} value={sprint.id}>
+                  <SelectItem key={sprint.sprint_id} value={sprint.sprint_id}>
                     {sprint.sprint_name}
                   </SelectItem>
                 ))}

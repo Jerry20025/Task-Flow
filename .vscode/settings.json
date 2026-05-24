@@ -1,0 +1,5 @@
+{
+  "prisma.pinToPrisma6": false,
+  "prisma.hidePrisma6Prompts": true,
+  "prisma.schemaPath": "${workspaceFolder}/backend/prisma/schema.prisma"
+}

@@ -16,6 +16,7 @@ import {
   X,
   ChevronDown,
   Plus,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -32,7 +33,7 @@ import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api';
-import type { Organization, OrgRole } from '@/lib/types';
+import type { Organization } from '@/lib/types';
 
 function getInitials(firstName?: string, lastName?: string) {
   return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase() || 'U';
@@ -48,24 +49,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     isAuthenticated ? 'orgs' : null,
     async () => {
       const response = await api.getMyOrgs();
-      return response.data;
+      return response.data ?? [];
     }
   );
 
-  const orgs = orgsData || [];
+  const orgs: Organization[] = orgsData ?? [];
 
-  // Extract current org slug from pathname
   const currentOrgSlug = pathname.match(/\/app\/orgs\/([^\/]+)/)?.[1];
-  const currentOrg = orgs.find((org: Organization & { my_role: OrgRole }) => org.slug === currentOrgSlug);
-
-  // Extract current project key from pathname
+  const currentOrg = orgs.find((org) => org.slug === currentOrgSlug);
   const currentProjectKey = pathname.match(/\/projects\/([^\/]+)/)?.[1];
 
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.push('/login');
+    if (!authLoading) {
+      if (!isAuthenticated) {
+        router.push('/login');
+      } else if (user && !user.is_verified) {
+        router.push('/verify-email');
+      }
     }
-  }, [authLoading, isAuthenticated, router]);
+  }, [authLoading, isAuthenticated, user, router]);
 
   const handleLogout = async () => {
     await logout();
@@ -80,7 +82,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || (user && !user.is_verified)) {
     return null;
   }
 
@@ -91,236 +93,267 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const orgNavigation = currentOrg
     ? [
-        { name: 'Overview', href: `/app/orgs/${currentOrgSlug}`, icon: Building2 },
-        { name: 'Projects', href: `/app/orgs/${currentOrgSlug}/projects`, icon: FolderKanban },
-        { name: 'Members', href: `/app/orgs/${currentOrgSlug}/members`, icon: Users },
-        { name: 'Settings', href: `/app/orgs/${currentOrgSlug}/settings`, icon: Settings },
-      ]
+      { name: 'Overview', href: `/app/orgs/${currentOrgSlug}`, icon: Building2 },
+      { name: 'Projects', href: `/app/orgs/${currentOrgSlug}/projects`, icon: FolderKanban },
+      { name: 'Members', href: `/app/orgs/${currentOrgSlug}/members`, icon: Users },
+      { name: 'Settings', href: `/app/orgs/${currentOrgSlug}/settings`, icon: Settings },
+    ]
     : [];
 
-  const projectNavigation = currentProjectKey && currentOrg
-    ? [
-        { name: 'Board', href: `/app/orgs/${currentOrgSlug}/projects/${currentProjectKey}/board`, icon: FolderKanban },
-        { name: 'Backlog', href: `/app/orgs/${currentOrgSlug}/projects/${currentProjectKey}/backlog`, icon: FolderKanban },
+  const projectNavigation =
+    currentProjectKey && currentOrg
+      ? [
+        {
+          name: 'Board',
+          href: `/app/orgs/${currentOrgSlug}/projects/${currentProjectKey}/board`,
+          icon: FolderKanban,
+        },
+        {
+          name: 'Backlog',
+          href: `/app/orgs/${currentOrgSlug}/projects/${currentProjectKey}/backlog`,
+          icon: FolderKanban,
+        },
+        {
+          name: 'Members',
+          href: `/app/orgs/${currentOrgSlug}/projects/${currentProjectKey}/members`,
+          icon: Users,
+        },
+        {
+          name: 'Settings',
+          href: `/app/orgs/${currentOrgSlug}/projects/${currentProjectKey}/settings`,
+          icon: Settings,
+        },
       ]
-    : [];
+      : [];
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Mobile sidebar overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-sidebar border-r border-sidebar-border transform transition-transform lg:translate-x-0 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        <div className="flex h-full flex-col">
-          {/* Logo */}
-          <div className="flex h-14 items-center justify-between px-4 border-b border-sidebar-border">
-            <Link href="/app" className="flex items-center gap-2">
-              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-sidebar-primary">
-                <Layers className="w-5 h-5 text-sidebar-primary-foreground" />
-              </div>
-              <span className="text-lg font-semibold text-sidebar-foreground">TaskFlow</span>
-            </Link>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="lg:hidden"
-              onClick={() => setSidebarOpen(false)}
-            >
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
-
-          <ScrollArea className="flex-1 py-4">
-            {/* Org Selector */}
-            {orgs.length > 0 && (
-              <div className="px-3 mb-4">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-between bg-sidebar-accent border-sidebar-border text-sidebar-foreground"
-                    >
-                      <span className="truncate">
-                        {currentOrg?.org_name || 'Select organization'}
-                      </span>
-                      <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-56">
-                    <DropdownMenuLabel>Organizations</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {orgs.map((org: Organization & { my_role: OrgRole }) => (
-                      <DropdownMenuItem
-                        key={org.id}
-                        onClick={() => router.push(`/app/orgs/${org.slug}`)}
-                      >
-                        <Building2 className="mr-2 h-4 w-4" />
-                        <span className="truncate">{org.org_name}</span>
-                      </DropdownMenuItem>
-                    ))}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => router.push('/app/orgs/new')}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create organization
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            )}
-
-            {/* Main Navigation */}
-            <nav className="px-3 space-y-1">
-              {navigation.map((item) => {
-                const isActive = pathname === item.href;
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                        : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
-                    }`}
-                  >
-                    <item.icon className="h-5 w-5" />
-                    {item.name}
-                  </Link>
-                );
-              })}
-            </nav>
-
-            {/* Org Navigation */}
-            {orgNavigation.length > 0 && (
-              <>
-                <Separator className="my-4 bg-sidebar-border" />
-                <div className="px-3">
-                  <h3 className="px-3 text-xs font-semibold text-sidebar-foreground/60 uppercase tracking-wider mb-2">
-                    {currentOrg?.org_name}
-                  </h3>
-                  <nav className="space-y-1">
-                    {orgNavigation.map((item) => {
-                      const isActive = pathname === item.href;
-                      return (
-                        <Link
-                          key={item.name}
-                          href={item.href}
-                          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            isActive
-                              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                              : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
-                          }`}
-                        >
-                          <item.icon className="h-5 w-5" />
-                          {item.name}
-                        </Link>
-                      );
-                    })}
-                  </nav>
-                </div>
-              </>
-            )}
-
-            {/* Project Navigation */}
-            {projectNavigation.length > 0 && (
-              <>
-                <Separator className="my-4 bg-sidebar-border" />
-                <div className="px-3">
-                  <h3 className="px-3 text-xs font-semibold text-sidebar-foreground/60 uppercase tracking-wider mb-2">
-                    Project: {currentProjectKey}
-                  </h3>
-                  <nav className="space-y-1">
-                    {projectNavigation.map((item) => {
-                      const isActive = pathname === item.href;
-                      return (
-                        <Link
-                          key={item.name}
-                          href={item.href}
-                          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            isActive
-                              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                              : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
-                          }`}
-                        >
-                          <item.icon className="h-5 w-5" />
-                          {item.name}
-                        </Link>
-                      );
-                    })}
-                  </nav>
-                </div>
-              </>
-            )}
-          </ScrollArea>
-
-          {/* User menu */}
-          <div className="border-t border-sidebar-border p-3">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start gap-3 px-2 hover:bg-sidebar-accent"
-                >
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={user?.avatar_url} />
-                    <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
-                      {getInitials(user?.first_name, user?.last_name)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col items-start text-left">
-                    <span className="text-sm font-medium text-sidebar-foreground truncate max-w-[140px]">
-                      {user?.first_name} {user?.last_name}
-                    </span>
-                    <span className="text-xs text-sidebar-foreground/60 truncate max-w-[140px]">
-                      {user?.email}
-                    </span>
-                  </div>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" align="start" side="top">
-                <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => router.push('/app/profile')}>
-                  <Settings className="mr-2 h-4 w-4" />
-                  Profile settings
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="text-destructive">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sign out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+      {/* ── Email verification banner ──────────────────────── */}
+      {user && !user.is_verified && (
+        <div className="fixed top-0 left-0 right-0 z-[60] flex items-center justify-between gap-3 bg-yellow-500/10 border-b border-yellow-500/30 px-4 py-2 text-sm text-yellow-600 dark:text-yellow-400">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>
+              Your email is not verified. Some features may be restricted.{' '}
+              <span className="font-medium">Check your inbox for the verification link.</span>
+            </span>
           </div>
         </div>
-      </aside>
+      )}
 
-      {/* Main content */}
-      <div className="lg:pl-64">
-        {/* Mobile header */}
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-border bg-background px-4 lg:hidden">
-          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
-            <Menu className="h-5 w-5" />
-          </Button>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary">
-              <Layers className="w-5 h-5 text-primary-foreground" />
+      {/* Push content down when banner is visible */}
+      <div className={user && !user.is_verified ? 'pt-10' : ''}>
+        {/* Mobile sidebar overlay */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        {/* Sidebar */}
+        <aside
+          className={`fixed inset-y-0 left-0 z-50 w-64 bg-sidebar border-r border-sidebar-border transform transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+            } ${user && !user.is_verified ? 'top-10' : ''}`}
+        >
+          <div className="flex h-full flex-col">
+            {/* Logo */}
+            <div className="flex h-14 items-center justify-between px-4 border-b border-sidebar-border">
+              <Link href="/app" className="flex items-center gap-2">
+                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-sidebar-primary">
+                  <Layers className="w-5 h-5 text-sidebar-primary-foreground" />
+                </div>
+                <span className="text-lg font-semibold text-sidebar-foreground">TaskFlow</span>
+              </Link>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="lg:hidden"
+                onClick={() => setSidebarOpen(false)}
+              >
+                <X className="h-5 w-5" />
+              </Button>
             </div>
-            <span className="text-lg font-semibold">TaskFlow</span>
-          </div>
-        </header>
 
-        {/* Page content */}
-        <main className="min-h-[calc(100vh-3.5rem)] lg:min-h-screen">{children}</main>
+            <ScrollArea className="flex-1 py-4">
+              {/* Org Selector */}
+              {orgs.length > 0 && (
+                <div className="px-3 mb-4">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-between bg-sidebar-accent border-sidebar-border text-sidebar-foreground"
+                      >
+                        <span className="truncate">
+                          {currentOrg?.org_name || 'Select organization'}
+                        </span>
+                        <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56">
+                      <DropdownMenuLabel>Organizations</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {orgs.map((org) => (
+                        <DropdownMenuItem
+                          key={org.org_id}
+                          onClick={() => router.push(`/app/orgs/${org.slug}`)}
+                        >
+                          <Building2 className="mr-2 h-4 w-4" />
+                          <span className="truncate">{org.org_name}</span>
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => router.push('/app/orgs/new')}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create organization
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              )}
+
+              {/* Main Navigation */}
+              <nav className="px-3 space-y-1">
+                {navigation.map((item) => {
+                  const isActive = pathname === item.href;
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive
+                          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                          : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
+                        }`}
+                    >
+                      <item.icon className="h-5 w-5" />
+                      {item.name}
+                    </Link>
+                  );
+                })}
+              </nav>
+
+              {/* Org Navigation */}
+              {orgNavigation.length > 0 && (
+                <>
+                  <Separator className="my-4 bg-sidebar-border" />
+                  <div className="px-3">
+                    <h3 className="px-3 text-xs font-semibold text-sidebar-foreground/60 uppercase tracking-wider mb-2">
+                      {currentOrg?.org_name}
+                    </h3>
+                    <nav className="space-y-1">
+                      {orgNavigation.map((item) => {
+                        const isActive = pathname === item.href;
+                        return (
+                          <Link
+                            key={item.name}
+                            href={item.href}
+                            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive
+                                ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                                : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
+                              }`}
+                          >
+                            <item.icon className="h-5 w-5" />
+                            {item.name}
+                          </Link>
+                        );
+                      })}
+                    </nav>
+                  </div>
+                </>
+              )}
+
+              {/* Project Navigation */}
+              {projectNavigation.length > 0 && (
+                <>
+                  <Separator className="my-4 bg-sidebar-border" />
+                  <div className="px-3">
+                    <h3 className="px-3 text-xs font-semibold text-sidebar-foreground/60 uppercase tracking-wider mb-2">
+                      Project: {currentProjectKey}
+                    </h3>
+                    <nav className="space-y-1">
+                      {projectNavigation.map((item) => {
+                        const isActive = pathname === item.href;
+                        return (
+                          <Link
+                            key={item.name}
+                            href={item.href}
+                            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive
+                                ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                                : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
+                              }`}
+                          >
+                            <item.icon className="h-5 w-5" />
+                            {item.name}
+                          </Link>
+                        );
+                      })}
+                    </nav>
+                  </div>
+                </>
+              )}
+            </ScrollArea>
+
+            {/* User menu */}
+            <div className="border-t border-sidebar-border p-3">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-3 px-2 hover:bg-sidebar-accent"
+                  >
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={user?.avatar_url} />
+                      <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
+                        {getInitials(user?.first_name, user?.last_name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col items-start text-left">
+                      <span className="text-sm font-medium text-sidebar-foreground truncate max-w-[140px]">
+                        {user?.first_name} {user?.last_name}
+                      </span>
+                      <span className="text-xs text-sidebar-foreground/60 truncate max-w-[140px]">
+                        {user?.email}
+                      </span>
+                    </div>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="start" side="top">
+                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => router.push('/app/profile')}>
+                    <Settings className="mr-2 h-4 w-4" />
+                    Profile settings
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout} className="text-destructive">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        </aside>
+
+        {/* Main content */}
+        <div className="flex flex-col min-h-screen lg:pl-64 w-full max-w-[100vw]">
+          {/* Mobile header */}
+          <header className="sticky top-0 z-30 flex shrink-0 h-14 items-center gap-4 border-b border-border bg-background px-4 lg:hidden">
+            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
+              <Menu className="h-5 w-5" />
+            </Button>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary">
+                <Layers className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <span className="text-lg font-semibold">TaskFlow</span>
+            </div>
+          </header>
+
+          {/* Page content */}
+          <main className="flex-1 flex flex-col w-full max-w-[100vw] lg:max-w-[calc(100vw-16rem)] overflow-x-hidden">{children}</main>
+        </div>
       </div>
     </div>
   );

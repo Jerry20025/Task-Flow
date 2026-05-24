@@ -1,0 +1,21 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const ticket_controller_1 = require("../controllers/ticket.controller");
+const auth_1 = require("../middleware/auth");
+const orgAccess_1 = require("../middleware/orgAccess");
+const projectAccess_1 = require("../middleware/projectAccess");
+const validate_1 = require("../middleware/validate");
+const ticket_validator_1 = require("../validators/ticket.validator");
+const router = (0, express_1.Router)({ mergeParams: true });
+router.use(auth_1.authenticate);
+router.post("/", (0, orgAccess_1.orgAccess)(), (0, projectAccess_1.projectAccess)(), (0, validate_1.validate)(ticket_validator_1.createTicketSchema), ticket_controller_1.createTicket);
+router.get("/", (0, orgAccess_1.orgAccess)(), (0, projectAccess_1.projectAccess)(), ticket_controller_1.listTickets);
+router.get("/:ticketId", (0, orgAccess_1.orgAccess)(), (0, projectAccess_1.projectAccess)(), ticket_controller_1.getTicket);
+router.patch("/:ticketId", (0, orgAccess_1.orgAccess)(), (0, projectAccess_1.projectAccess)(), (0, validate_1.validate)(ticket_validator_1.updateTicketSchema), ticket_controller_1.updateTicket);
+router.delete("/:ticketId", (0, orgAccess_1.orgAccess)(), (0, projectAccess_1.projectAccess)(["MANAGER"]), ticket_controller_1.deleteTicket);
+router.patch("/:ticketId/assign", (0, orgAccess_1.orgAccess)(), (0, projectAccess_1.projectAccess)(), (0, validate_1.validate)(ticket_validator_1.assignTicketSchema), ticket_controller_1.assignTicket);
+router.patch("/:ticketId/status", (0, orgAccess_1.orgAccess)(), (0, projectAccess_1.projectAccess)(), (0, validate_1.validate)(ticket_validator_1.changeStatusSchema), ticket_controller_1.changeStatus);
+router.patch("/:ticketId/sprint", (0, orgAccess_1.orgAccess)(), (0, projectAccess_1.projectAccess)(["MANAGER", "DEVELOPER"]), (0, validate_1.validate)(ticket_validator_1.moveToSprintSchema), ticket_controller_1.moveToSprint);
+exports.default = router;
+//# sourceMappingURL=ticket.routes.js.map

@@ -11,9 +11,23 @@ const transporter = nodemailer.createTransport({
     },
 });
 
-export const sendEmail = async (to: string, subject: string, text: string, html?: string) => {
+// Verify connection on startup — logs result but never crashes the server
+transporter.verify((error) => {
+    if (error) {
+        console.error("❌ SMTP connection failed:", error.message);
+    } else {
+        console.log("✅ SMTP connection established");
+    }
+});
+
+export const sendEmail = async (
+    to: string,
+    subject: string,
+    text: string,
+    html?: string
+): Promise<void> => {
     await transporter.sendMail({
-        from: config.smtpUser,
+        from: `"${config.smtpFromName}" <${config.smtpUser}>`,
         to,
         subject,
         text,

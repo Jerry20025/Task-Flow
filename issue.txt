@@ -1,0 +1,4 @@
+1) In organization I dont have option to add member in organisation
+2)Setting page of organization does not have option to edit/manage org, and also UI is not so professional, looks like a card
+is centrally aligned. 
+3) Creat a README.md that describe how to set-up the project
