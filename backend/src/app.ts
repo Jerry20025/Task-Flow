@@ -14,10 +14,10 @@ const app = express();
 app.use(helmet());
 app.use(
     cors({
-        origin: [
-            config.clientUrl,
-            "*"
-        ],
+        origin: function (origin, callback) {
+            // Allow any origin in development
+            callback(null, true);
+        },
         credentials: true,
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
