@@ -156,7 +156,7 @@ export const deleteOrg = asyncHandler(async (req: AuthRequest, res: Response) =>
             await tx.project.deleteMany({ where: { org_id: org.org_id } });
         }
 
-        await tx.aPI_Key.deleteMany({ where: { org_id: org.org_id } });
+
         await tx.org_Members.deleteMany({ where: { org_id: org.org_id } });
         await tx.org.delete({ where: { org_id: org.org_id } });
     });

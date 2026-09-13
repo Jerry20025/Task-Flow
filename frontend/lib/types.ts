@@ -29,7 +29,7 @@ export interface User {
 
 // ─── Organization ─────────────────────────────────────────────
 export type OrgRole = 'OWNER' | 'ADMIN' | 'MEMBER';
-export type SubscriptionPlan = 'FREE' | 'STARTER' | 'PRO' | 'ENTERPRISE';
+
 export type OrgStatus = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'CANCELLED';
 
 export interface Organization {
@@ -47,7 +47,7 @@ export interface Organization {
   state?: string;
   country?: string;
   postal_code?: string;
-  subscription_plan: SubscriptionPlan;
+
   status: OrgStatus;
   owner_id: string;
   created_at: string;
@@ -227,22 +227,6 @@ export interface ActivityLog {
   performed_by?: Pick<User, 'user_id' | 'first_name' | 'last_name' | 'avatar_url'>;
 }
 
-// ─── API Key ──────────────────────────────────────────────────
-export type ApiKeyScope = 'READ' | 'WRITE' | 'ADMIN';
-
-export interface ApiKey {
-  key_id: string;        // backend sends key_id not id
-  user_id: string;
-  org_id: string;
-  name: string;
-  scope: ApiKeyScope;
-  is_active: boolean;
-  last_used_at?: string;
-  expires_at?: string;
-  created_at: string;
-  // Only returned once on creation — never stored in DB
-  raw_key?: string;
-}
 
 // ─── Pagination ───────────────────────────────────────────────
 export interface Pagination {

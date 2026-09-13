@@ -142,7 +142,7 @@ export default function OrgSettingsPage({
       // The backend updateMemberRole allows setting OWNER only if current user is OWNER
       // We call the backend directly with OWNER role for the target user
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1'}/orgs/${slug}/members/${transferToUserId}`,
+        `${process.env.NEXT_PUBLIC_API_URL}/orgs/${slug}/members/${transferToUserId}`,
         {
           method: 'PATCH',
           credentials: 'include',

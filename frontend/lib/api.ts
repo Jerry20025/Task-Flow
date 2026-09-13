@@ -20,12 +20,11 @@ import type {
   Label,
   TicketLabel,
   ActivityLog,
-  ApiKey,
-  ApiKeyScope,
+
   Pagination,
 } from './types';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL as string;
 
 // Pages where we should NEVER redirect to /login (to avoid loops)
 const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email'];
@@ -802,25 +801,6 @@ class ApiClient {
     return res.data;
   }
 
-  // ─── API Keys ──────────────────────────────────────────────
-
-  async createApiKey(
-    slug: string,
-    data: { name: string; scope?: ApiKeyScope; expires_at?: string }
-  ): Promise<ApiResponse<ApiKey>> {
-    const res = await this.client.post(`/orgs/${slug}/api-keys`, data);
-    return res.data;
-  }
-
-  async getApiKeys(slug: string): Promise<ApiResponse<ApiKey[]>> {
-    const res = await this.client.get(`/orgs/${slug}/api-keys`);
-    return res.data;
-  }
-
-  async deleteApiKey(slug: string, keyId: string): Promise<ApiResponse<null>> {
-    const res = await this.client.delete(`/orgs/${slug}/api-keys/${keyId}`);
-    return res.data;
-  }
 }
 
 export const api = new ApiClient();

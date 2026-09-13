@@ -12,12 +12,7 @@ datasource db {
 
 // ─── ENUMS ────────────────────────────────────────────────────
 
-enum SubscriptionPlan {
-  FREE
-  STARTER
-  PRO
-  ENTERPRISE
-}
+
 
 enum OrgStatus {
   ACTIVE
@@ -99,11 +94,7 @@ enum ActivityAction {
   STATUS_CHANGED
 }
 
-enum ApiKeyScope {
-  READ
-  WRITE
-  ADMIN
-}
+
 
 // ─── MODELS ───────────────────────────────────────────────────
 
@@ -111,7 +102,7 @@ model Org {
   org_id            String           @id @default(uuid())
   org_name          String
   slug              String           @unique
-  subscription_plan SubscriptionPlan @default(FREE)
+
   status            OrgStatus        @default(ACTIVE)
 
   org_email     String?  @unique
@@ -134,7 +125,7 @@ model Org {
 
   members  Org_Members[]
   projects Project[]
-  api_keys API_Key[]
+
 }
 
 model Org_Members {
@@ -235,7 +226,7 @@ model User {
   comments             Comment[]
   uploaded_attachments Attachment[]
   activity_logs        Activity_Log[]
-  api_keys             API_Key[]
+
 }
 
 model Ticket {
@@ -337,21 +328,7 @@ model Activity_Log {
   performed_by    User   @relation(fields: [performed_by_id], references: [user_id])
 }
 
-model API_Key {
-  key_id       String      @id @default(uuid())
-  key_hash     String      @unique
-  name         String
-  scope        ApiKeyScope @default(READ)
-  is_active    Boolean     @default(true)
-  last_used_at DateTime?
-  expires_at   DateTime?
-  created_at   DateTime    @default(now())
 
-  user_id String
-  user    User   @relation(fields: [user_id], references: [user_id])
-  org_id  String
-  org     Org    @relation(fields: [org_id], references: [org_id])
-}
 
 model OTP {
   id         String   @id @default(uuid())

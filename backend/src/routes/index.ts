@@ -9,7 +9,7 @@ import attachmentRoutes from "./attachment.routes";
 import labelRoutes from "./label.routes";
 import ticketLabelRoutes from "./ticketLabel.routes";
 import userRoutes from "./user.routes";
-import apiKeyRoutes from "./apiKey.routes";
+
 import { authenticate } from "../middleware/auth";
 import { orgAccess } from "../middleware/orgAccess";
 import { projectAccess } from "../middleware/projectAccess";
@@ -57,7 +57,6 @@ router.get(
     authenticate, orgAccess(), projectAccess(), getProjectActivity
 );
 
-// 🔑 API Keys (nested under orgs)
-router.use("/orgs/:slug/api-keys", apiKeyRoutes);
+
 
 export default router;

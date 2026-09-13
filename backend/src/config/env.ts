@@ -15,7 +15,7 @@ export const config = {
     jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "30d",
 
     // App
-    clientUrl: process.env.CLIENT_URL || "http://localhost:3000",
+    clientUrl: process.env.CLIENT_URL,
     uploadDir: process.env.UPLOAD_DIR || "uploads",
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE || "10485760", 10), // 10MB
 
