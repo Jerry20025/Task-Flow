@@ -28,14 +28,14 @@ const generateTokens = (userId: string, email: string) => {
 const accessCookieOptions = {
     httpOnly: true,
     secure: config.nodeEnv === "production",
-    sameSite: "lax" as const,
+    sameSite: config.nodeEnv === "production" ? "none" : "lax" as const,
     maxAge: 15 * 60 * 1000, // 15 minutes
 };
 
 const refreshCookieOptions = {
     httpOnly: true,
     secure: config.nodeEnv === "production",
-    sameSite: "lax" as const,
+    sameSite: config.nodeEnv === "production" ? "none" : "lax" as const,
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
 };
 
