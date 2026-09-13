@@ -81,6 +81,16 @@ export const listProjects = asyncHandler(async (req: AuthRequest, res: Response)
         ];
     }
 
+    // Only allow ADMIN and OWNER to see all projects.
+    // If the user is just a MEMBER, they can only see projects they are part of.
+    if (req.orgMember?.role === "MEMBER") {
+        where.members = {
+            some: {
+                user_id: req.user!.user_id,
+            },
+        };
+    }
+
     const projects = await prisma.project.findMany({
         where,
         include: {
