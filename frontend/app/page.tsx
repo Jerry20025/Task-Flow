@@ -43,9 +43,7 @@ export default function LandingPage() {
               <span className="text-xl font-bold text-foreground">TaskFlow</span>
             </div>
             <div className="flex items-center gap-4">
-              <Link href="/pricing">
-                <Button variant="ghost">Pricing</Button>
-              </Link>
+
               <Link href="/login">
                 <Button variant="ghost">Sign In</Button>
               </Link>
