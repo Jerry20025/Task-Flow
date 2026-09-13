@@ -24,7 +24,7 @@ import type {
   Pagination,
 } from './types';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL as string;
+const BASE_URL = `${process.env.NEXT_PUBLIC_API_URL}/api/v1`;
 
 // Pages where we should NEVER redirect to /login (to avoid loops)
 const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email'];
