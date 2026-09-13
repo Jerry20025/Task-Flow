@@ -6,7 +6,7 @@ dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
 export const config = {
     port: parseInt(process.env.PORT || "5000", 10),
-    nodeEnv: process.env.NODE_ENV || "development",
+    nodeEnv: process.env.NODE_ENV || (process.env.VERCEL ? "production" : "development"),
 
     // JWT
     jwtSecret: process.env.JWT_SECRET || "super-secret-jwt-key-change-in-production",
