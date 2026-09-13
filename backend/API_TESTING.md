@@ -1,6 +1,6 @@
 # 🧪 JIRA Clone API - Testing Reference
 
-> **Base URL:** `http://localhost:5000/api/v1`
+> **Base URL:** `https://task-flow-woad-iota.vercel.app/api/v1`
 >
 > **Auth:** Most endpoints require a Bearer token. After login/register, use the returned `accessToken` in the `Authorization` header:
 > ```
